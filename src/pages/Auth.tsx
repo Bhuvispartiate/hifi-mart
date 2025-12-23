@@ -44,7 +44,7 @@ const Auth = () => {
 
     setLoading(true);
     const fullPhone = `+91${phoneNumber}`;
-    const result = await sendOTP(fullPhone);
+    const result = await sendOTP(fullPhone, 'recaptcha-container');
     setLoading(false);
 
     if (result.success) {
