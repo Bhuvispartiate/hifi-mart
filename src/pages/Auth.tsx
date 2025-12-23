@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,13 +17,16 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const { user, sendOTP, verifyOTP, demoLogin, isDemoMode } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  const returnUrl = searchParams.get('returnUrl') || '/';
 
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      navigate(returnUrl, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, returnUrl]);
 
   const formatPhoneNumber = (value: string) => {
     // Remove all non-digits
@@ -82,7 +85,7 @@ const Auth = () => {
         title: 'Welcome!',
         description: 'You have successfully logged in',
       });
-      navigate('/', { replace: true });
+      navigate(returnUrl, { replace: true });
     } else {
       toast({
         title: 'Verification Failed',
@@ -98,7 +101,7 @@ const Auth = () => {
       title: 'Demo Login',
       description: 'Logged in as Demo User',
     });
-    navigate('/', { replace: true });
+    navigate(returnUrl, { replace: true });
   };
 
   return (

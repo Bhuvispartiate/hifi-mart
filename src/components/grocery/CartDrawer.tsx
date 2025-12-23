@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { useCart } from '@/contexts/CartContext';
-import { Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface CartDrawerProps {
   open: boolean;
@@ -12,6 +13,17 @@ interface CartDrawerProps {
 
 export const CartDrawer = ({ open, onOpenChange }: CartDrawerProps) => {
   const { items, updateQuantity, removeItem, totalPrice, deliveryFee, clearCart } = useCart();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleCheckout = () => {
+    onOpenChange(false);
+    if (!user) {
+      navigate('/auth?returnUrl=/checkout');
+    } else {
+      navigate('/checkout');
+    }
+  };
 
   const isEmpty = items.length === 0;
 
@@ -138,11 +150,12 @@ export const CartDrawer = ({ open, onOpenChange }: CartDrawerProps) => {
                   <span>₹{totalPrice + deliveryFee}</span>
                 </div>
               </div>
-              <Link to="/checkout" onClick={() => onOpenChange(false)}>
-                <Button className="w-full h-12 text-base font-semibold">
-                  Proceed to Checkout
-                </Button>
-              </Link>
+              <Button 
+                className="w-full h-12 text-base font-semibold"
+                onClick={handleCheckout}
+              >
+                Proceed to Checkout
+              </Button>
             </div>
           </>
         )}

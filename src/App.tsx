@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "@/contexts/CartContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Home from "./pages/Home";
 import Categories from "./pages/Categories";
 import Offers from "./pages/Offers";
@@ -31,11 +32,11 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/categories" element={<Categories />} />
               <Route path="/offers" element={<Offers />} />
-              <Route path="/orders" element={<Orders />} />
+              <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
               <Route path="/account" element={<Account />} />
-              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
               <Route path="/product/:id" element={<ProductDetail />} />
-              <Route path="/order/:orderId" element={<OrderStatus />} />
+              <Route path="/order/:orderId" element={<ProtectedRoute><OrderStatus /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
