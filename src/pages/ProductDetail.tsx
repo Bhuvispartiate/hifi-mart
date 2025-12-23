@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { useCart, CartItem } from '@/contexts/CartContext';
 import { getProductById, getRelatedProducts, getProductReviews } from '@/data/products';
 import { ProductCard } from '@/components/grocery/ProductCard';
+import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -243,6 +244,8 @@ const ProductDetail = () => {
           </div>
         )}
       </div>
+
+      <DeliveryActionBar />
     </div>
   );
 };
