@@ -15,7 +15,7 @@ import Checkout from "./pages/Checkout";
 import ProductDetail from "./pages/ProductDetail";
 import OrderStatus from "./pages/OrderStatus";
 import ProfileSettings from "./pages/ProfileSettings";
-import AdminSeed from "./pages/AdminSeed";
+
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import DeliveryHome from "./pages/delivery/DeliveryHome";
@@ -43,7 +43,7 @@ const App = () => (
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/order/:orderId" element={<ProtectedRoute><OrderStatus /></ProtectedRoute>} />
               <Route path="/profile/settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
-              <Route path="/admin/seed" element={<AdminSeed />} />
+              
               <Route path="/delivery" element={<DeliveryHome />} />
               <Route path="/delivery/orders" element={<DeliveryOrders />} />
               <Route path="/delivery/profile" element={<DeliveryProfile />} />

@@ -116,6 +116,97 @@ export const banners = [
   { id: "3", title: "Snacks & Munchies", subtitle: "Party time essentials", image: "https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=800&h=400&fit=crop", color: "bg-secondary" },
 ];
 
+export const mockOrders = [
+  {
+    id: "order1",
+    userId: "demo_user",
+    date: "22 Dec 2024",
+    status: "delivered" as const,
+    total: 485,
+    items: [
+      { name: "Fresh Bananas", qty: 2, price: 45, productId: "1" },
+      { name: "Red Apples", qty: 1, price: 180, productId: "2" },
+      { name: "Amul Toned Milk", qty: 3, price: 28, productId: "11" },
+    ],
+    deliveryAddress: "123, Green Park, Sector 15, Chandigarh - 160015",
+    deliveryCoordinates: { lat: 30.7333, lng: 76.7794 },
+    timeline: [
+      { status: "Order Placed", time: "10:30 AM", completed: true },
+      { status: "Order Confirmed", time: "10:32 AM", completed: true },
+      { status: "Preparing", time: "10:45 AM", completed: true },
+      { status: "Out for Delivery", time: "11:00 AM", completed: true },
+      { status: "Delivered", time: "11:15 AM", completed: true },
+    ],
+    deliveredAt: "11:15 AM",
+  },
+  {
+    id: "order2",
+    userId: "demo_user",
+    date: "23 Dec 2024",
+    status: "out_for_delivery" as const,
+    total: 675,
+    items: [
+      { name: "Sweet Mangoes", qty: 1, price: 299, productId: "3" },
+      { name: "Fresh Paneer", qty: 2, price: 95, productId: "12" },
+      { name: "Farm Eggs", qty: 1, price: 85, productId: "14" },
+    ],
+    deliveryAddress: "45, Model Town, Phase 2, Ludhiana - 141001",
+    deliveryCoordinates: { lat: 30.9010, lng: 75.8573 },
+    deliveryPartner: {
+      name: "Rajesh Kumar",
+      phone: "+91 98765 43210",
+      rating: 4.8,
+    },
+    timeline: [
+      { status: "Order Placed", time: "2:00 PM", completed: true },
+      { status: "Order Confirmed", time: "2:05 PM", completed: true },
+      { status: "Preparing", time: "2:15 PM", completed: true },
+      { status: "Out for Delivery", time: "2:30 PM", completed: true },
+      { status: "Delivered", time: "", completed: false },
+    ],
+    eta: "10-15 mins",
+  },
+  {
+    id: "order3",
+    userId: "demo_user",
+    date: "21 Dec 2024",
+    status: "cancelled" as const,
+    total: 320,
+    items: [
+      { name: "Tata Tea Gold", qty: 1, price: 285, productId: "23" },
+      { name: "Brown Bread", qty: 1, price: 45, productId: "26" },
+    ],
+    deliveryAddress: "78, Civil Lines, Jalandhar - 144001",
+    timeline: [
+      { status: "Order Placed", time: "9:00 AM", completed: true },
+      { status: "Cancelled", time: "9:15 AM", completed: true },
+    ],
+    cancelledReason: "Item out of stock",
+  },
+  {
+    id: "order4",
+    userId: "demo_user",
+    date: "20 Dec 2024",
+    status: "delivered" as const,
+    total: 890,
+    items: [
+      { name: "Nescafe Classic", qty: 1, price: 375, productId: "24" },
+      { name: "Haldiram's Bhujia", qty: 2, price: 99, productId: "18" },
+      { name: "Croissant", qty: 3, price: 65, productId: "28" },
+    ],
+    deliveryAddress: "Plot 12, Industrial Area, Mohali - 160062",
+    deliveryCoordinates: { lat: 30.7046, lng: 76.7179 },
+    timeline: [
+      { status: "Order Placed", time: "4:00 PM", completed: true },
+      { status: "Order Confirmed", time: "4:05 PM", completed: true },
+      { status: "Preparing", time: "4:20 PM", completed: true },
+      { status: "Out for Delivery", time: "4:35 PM", completed: true },
+      { status: "Delivered", time: "4:50 PM", completed: true },
+    ],
+    deliveredAt: "4:50 PM",
+  },
+];
+
 export const getProductById = (id: string): Product | undefined => {
   return products.find(p => p.id === id);
 };
