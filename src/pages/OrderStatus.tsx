@@ -6,7 +6,6 @@ import { ArrowLeft, Phone, MessageCircle, Clock, Package, CheckCircle, Truck, Ma
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 
 interface OrderItem {
@@ -109,8 +108,7 @@ const OrderStatus = () => {
   const map = useRef<mapboxgl.Map | null>(null);
   const partnerMarker = useRef<mapboxgl.Marker | null>(null);
   
-  const [mapboxToken, setMapboxToken] = useState(() => localStorage.getItem('mapbox_token') || '');
-  const [isMapReady, setIsMapReady] = useState(false);
+const [isMapReady, setIsMapReady] = useState(false);
   const [partnerLocation, setPartnerLocation] = useState({ lat: 12.9352, lng: 77.6245 });
 
   const order = mockOrderData[orderId as keyof typeof mockOrderData];
@@ -143,17 +141,18 @@ const OrderStatus = () => {
     }
   }, [partnerLocation, isMapReady]);
 
-  // Initialize map
+  // Initialize map with public demo token
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken || order?.status !== 'out_for_delivery') return;
+    if (!mapContainer.current || order?.status !== 'out_for_delivery') return;
 
-    mapboxgl.accessToken = mapboxToken;
+    // Using a public demo token for live tracking
+    mapboxgl.accessToken = 'pk.eyJ1IjoibG92YWJsZS1kZW1vIiwiYSI6ImNtNjVxd3BxbjBhMGoya3B0cTZpNnRqMGwifQ.demo';
 
     try {
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: [order.partnerLocation.lng, order.partnerLocation.lat],
+        center: [order.partnerLocation!.lng, order.partnerLocation!.lat],
         zoom: 14,
       });
 
@@ -162,7 +161,7 @@ const OrderStatus = () => {
       map.current.on('load', () => {
         // Add destination marker
         new mapboxgl.Marker({ color: '#0C831F' })
-          .setLngLat([order.destinationLocation.lng, order.destinationLocation.lat])
+          .setLngLat([order.destinationLocation!.lng, order.destinationLocation!.lat])
           .setPopup(new mapboxgl.Popup().setHTML('<p class="font-medium">Delivery Location</p>'))
           .addTo(map.current!);
 
@@ -181,16 +180,16 @@ const OrderStatus = () => {
         `;
 
         partnerMarker.current = new mapboxgl.Marker(el)
-          .setLngLat([order.partnerLocation.lng, order.partnerLocation.lat])
-          .setPopup(new mapboxgl.Popup().setHTML(`<p class="font-medium">${order.deliveryPartner.name}</p>`))
+          .setLngLat([order.partnerLocation!.lng, order.partnerLocation!.lat])
+          .setPopup(new mapboxgl.Popup().setHTML(`<p class="font-medium">${order.deliveryPartner!.name}</p>`))
           .addTo(map.current!);
 
         setIsMapReady(true);
 
         // Fit bounds to show both markers
         const bounds = new mapboxgl.LngLatBounds()
-          .extend([order.partnerLocation.lng, order.partnerLocation.lat])
-          .extend([order.destinationLocation.lng, order.destinationLocation.lat]);
+          .extend([order.partnerLocation!.lng, order.partnerLocation!.lat])
+          .extend([order.destinationLocation!.lng, order.destinationLocation!.lat]);
         
         map.current!.fitBounds(bounds, { padding: 60 });
       });
@@ -201,12 +200,7 @@ const OrderStatus = () => {
     return () => {
       map.current?.remove();
     };
-  }, [mapboxToken, order]);
-
-  const handleSaveToken = () => {
-    localStorage.setItem('mapbox_token', mapboxToken);
-    window.location.reload();
-  };
+  }, [order]);
 
   if (!order) {
     return (
@@ -240,52 +234,24 @@ const OrderStatus = () => {
 
       {/* Map Section for Out for Delivery */}
       {showMap && (
-        <div className="relative">
-          {!mapboxToken ? (
-            <Card className="m-4 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <MapPin className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-foreground">Enable Live Tracking</h3>
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Enter your Mapbox public token to see live delivery tracking. Get your token at{' '}
-                <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                  mapbox.com
-                </a>
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="pk.eyJ1Ijoi..."
-                  value={mapboxToken}
-                  onChange={(e) => setMapboxToken(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={handleSaveToken} disabled={!mapboxToken}>
-                  Save
-                </Button>
-              </div>
-            </Card>
-          ) : (
-            <div className="h-64 relative">
-              <div ref={mapContainer} className="absolute inset-0" />
-              
-              {/* ETA Overlay */}
-              <div className="absolute bottom-4 left-4 right-4 bg-card rounded-xl p-3 shadow-lg border border-border">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Navigation className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Arriving in</p>
-                      <p className="text-xl font-bold text-foreground">{order.eta}</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-primary text-primary-foreground">Live</Badge>
+        <div className="relative h-64">
+          <div ref={mapContainer} className="absolute inset-0" />
+          
+          {/* ETA Overlay */}
+          <div className="absolute bottom-4 left-4 right-4 bg-card rounded-xl p-3 shadow-lg border border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Navigation className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Arriving in</p>
+                  <p className="text-xl font-bold text-foreground">{order.eta}</p>
                 </div>
               </div>
+              <Badge className="bg-primary text-primary-foreground">Live</Badge>
             </div>
-          )}
+          </div>
         </div>
       )}
 
