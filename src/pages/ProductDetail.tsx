@@ -37,7 +37,7 @@ const ProductDetail = () => {
     : (product.rating?.toFixed(1) || '4.5');
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-36">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border">
         <div className="flex items-center justify-between px-4 py-3">
