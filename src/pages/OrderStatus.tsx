@@ -1,15 +1,71 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Phone, MessageCircle, Clock, Package, CheckCircle, Truck, MapPin, Navigation, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useOrder } from '@/hooks/useFirestoreData';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
 
 const OrderStatus = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { order, loading } = useOrder(orderId);
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Initialize map if coordinates are available
+  useEffect(() => {
+    if (!order?.deliveryCoordinates || !mapContainer.current || map.current) return;
+
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+
+    const { lat, lng } = order.deliveryCoordinates;
+
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [lng, lat],
+      zoom: 15,
+      interactive: false,
+    });
+
+    // Create custom marker element
+    const markerEl = document.createElement('div');
+    markerEl.innerHTML = `
+      <div style="
+        width: 36px; 
+        height: 36px; 
+        background: hsl(130, 85%, 28%); 
+        border-radius: 50% 50% 50% 0; 
+        transform: rotate(-45deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      ">
+        <div style="transform: rotate(45deg); color: white; font-size: 16px;">📍</div>
+      </div>
+    `;
+
+    new mapboxgl.Marker({ element: markerEl })
+      .setLngLat([lng, lat])
+      .addTo(map.current);
+
+    map.current.on('load', () => {
+      setMapLoaded(true);
+    });
+
+    return () => {
+      map.current?.remove();
+      map.current = null;
+    };
+  }, [order?.deliveryCoordinates]);
 
   if (loading) {
     return (
@@ -98,6 +154,47 @@ const OrderStatus = () => {
           </Card>
         )}
 
+        {/* Delivery Location Map */}
+        {order.deliveryCoordinates && (
+          <Card className="overflow-hidden">
+            <div className="relative">
+              <div 
+                ref={mapContainer} 
+                className="w-full h-[180px] bg-muted"
+              />
+              {!mapLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-border">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm text-foreground">Delivery Location</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{order.deliveryAddress}</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Delivery Address (only if no coordinates) */}
+        {!order.deliveryCoordinates && (
+          <Card className="p-4">
+            <div className="flex items-start gap-3">
+              <MapPin className="h-5 w-5 text-primary mt-0.5" />
+              <div>
+                <p className="font-medium text-foreground mb-1">Delivery Address</p>
+                <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Order Timeline */}
         {order.timeline && order.timeline.length > 0 && (
           <Card className="p-4">
@@ -144,17 +241,6 @@ const OrderStatus = () => {
             </div>
           </Card>
         )}
-
-        {/* Delivery Address */}
-        <Card className="p-4">
-          <div className="flex items-start gap-3">
-            <MapPin className="h-5 w-5 text-primary mt-0.5" />
-            <div>
-              <p className="font-medium text-foreground mb-1">Delivery Address</p>
-              <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
-            </div>
-          </div>
-        </Card>
 
         {/* Order Items */}
         <Card className="p-4">

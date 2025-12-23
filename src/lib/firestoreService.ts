@@ -86,6 +86,10 @@ export interface Order {
   total: number;
   items: OrderItem[];
   deliveryAddress: string;
+  deliveryCoordinates?: {
+    lat: number;
+    lng: number;
+  };
   deliveryPartner?: {
     name: string;
     phone: string;
