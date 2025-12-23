@@ -4,7 +4,10 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { BottomNav } from '@/components/grocery/BottomNav';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useCart } from '@/contexts/CartContext';
+import { products } from '@/data/products';
+import { toast } from 'sonner';
 
 // Mock orders data
 const orders = [
@@ -61,6 +64,31 @@ const statusConfig = {
 
 const Orders = () => {
   const hasOrders = orders.length > 0;
+  const { addItem, clearCart } = useCart();
+  const navigate = useNavigate();
+
+  const handleReorder = (order: typeof orders[0]) => {
+    // Clear cart first
+    clearCart();
+    
+    // Add each item from the order to cart
+    order.items.forEach(item => {
+      // Find the product in our products list
+      const product = products.find(p => p.name === item.name);
+      if (product) {
+        for (let i = 0; i < item.qty; i++) {
+          addItem(product);
+        }
+      }
+    });
+    
+    toast.success('Items added to cart', {
+      description: `${order.items.length} items from order #${order.id}`,
+    });
+    
+    // Navigate to checkout
+    navigate('/checkout');
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -145,7 +173,11 @@ const Orders = () => {
 
                   {/* Actions */}
                   <div className="flex items-center justify-between">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleReorder(order)}
+                    >
                       <RefreshCw className="w-3.5 h-3.5 mr-1" />
                       Reorder
                     </Button>
