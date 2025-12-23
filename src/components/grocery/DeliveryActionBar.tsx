@@ -1,4 +1,4 @@
-import { Package, Clock, MapPin, X } from 'lucide-react';
+import { Package, Clock, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
@@ -12,7 +12,6 @@ interface ActiveDelivery {
 
 export const DeliveryActionBar = () => {
   const [activeDelivery, setActiveDelivery] = useState<ActiveDelivery | null>(null);
-  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     // Simulated active delivery - in production, this would come from backend
@@ -25,7 +24,7 @@ export const DeliveryActionBar = () => {
     setActiveDelivery(mockDelivery);
   }, []);
 
-  if (!activeDelivery || dismissed) return null;
+  if (!activeDelivery) return null;
 
   const statusConfig = {
     preparing: {
@@ -72,14 +71,6 @@ export const DeliveryActionBar = () => {
               Track
             </Button>
           </Link>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setDismissed(true)}
-            className="h-8 w-8 text-primary-foreground/70 hover:text-primary-foreground hover:bg-background/20"
-          >
-            <X className="w-4 h-4" />
-          </Button>
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ export const CartDrawer = ({ open, onOpenChange }: CartDrawerProps) => {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0">
+      <SheetContent className="w-full sm:max-w-md flex flex-col p-0" hideCloseButton>
         <SheetHeader className="px-4 py-3 border-b border-border">
           <div className="flex items-center gap-3">
             <Button
