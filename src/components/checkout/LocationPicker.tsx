@@ -3,7 +3,6 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Navigation, X, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface LocationPickerProps {
@@ -13,19 +12,36 @@ interface LocationPickerProps {
   initialLocation?: { lat: number; lng: number };
 }
 
-const MAPBOX_TOKEN_KEY = 'mapbox_public_token';
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
 
 export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocation }: LocationPickerProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const marker = useRef<mapboxgl.Marker | null>(null);
   
-  const [mapboxToken, setMapboxToken] = useState(() => localStorage.getItem(MAPBOX_TOKEN_KEY) || '');
-  const [isTokenSet, setIsTokenSet] = useState(() => !!localStorage.getItem(MAPBOX_TOKEN_KEY));
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [address, setAddress] = useState('');
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+
+  // Reverse geocode to get address
+  const fetchAddress = useCallback(async (lat: number, lng: number) => {
+    setIsLoadingAddress(true);
+    try {
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}&country=IN`
+      );
+      const data = await response.json();
+      if (data.features && data.features.length > 0) {
+        setAddress(data.features[0].place_name);
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      setAddress('Location selected');
+    } finally {
+      setIsLoadingAddress(false);
+    }
+  }, []);
 
   // Get user's current location
   const getCurrentLocation = useCallback(() => {
@@ -65,34 +81,13 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
     } else {
       setIsLoadingLocation(false);
     }
-  }, []);
-
-  // Reverse geocode to get address
-  const fetchAddress = async (lat: number, lng: number) => {
-    if (!mapboxToken) return;
-    
-    setIsLoadingAddress(true);
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}&country=IN`
-      );
-      const data = await response.json();
-      if (data.features && data.features.length > 0) {
-        setAddress(data.features[0].place_name);
-      }
-    } catch (error) {
-      console.error('Geocoding error:', error);
-      setAddress('Location selected');
-    } finally {
-      setIsLoadingAddress(false);
-    }
-  };
+  }, [fetchAddress]);
 
   // Initialize map
   useEffect(() => {
-    if (!open || !isTokenSet || !mapContainer.current || map.current) return;
+    if (!open || !mapContainer.current || map.current) return;
 
-    mapboxgl.accessToken = mapboxToken;
+    mapboxgl.accessToken = MAPBOX_TOKEN;
 
     const initialLat = initialLocation?.lat || 28.6139;
     const initialLng = initialLocation?.lng || 77.2090;
@@ -157,14 +152,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
       map.current?.remove();
       map.current = null;
     };
-  }, [open, isTokenSet, mapboxToken, initialLocation, getCurrentLocation]);
-
-  const handleSaveToken = () => {
-    if (mapboxToken.trim()) {
-      localStorage.setItem(MAPBOX_TOKEN_KEY, mapboxToken.trim());
-      setIsTokenSet(true);
-    }
-  };
+  }, [open, initialLocation, getCurrentLocation, fetchAddress]);
 
   const handleConfirmLocation = () => {
     if (selectedLocation && address) {
@@ -187,86 +175,62 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
           </DialogTitle>
         </DialogHeader>
 
-        {!isTokenSet ? (
-          <div className="p-4 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              To use the map, please enter your Mapbox public token. You can get one for free at{' '}
-              <a 
-                href="https://mapbox.com" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-primary underline"
-              >
-                mapbox.com
-              </a>
-            </p>
-            <Input
-              placeholder="Enter Mapbox public token"
-              value={mapboxToken}
-              onChange={(e) => setMapboxToken(e.target.value)}
-            />
-            <Button onClick={handleSaveToken} className="w-full">
-              Save Token
-            </Button>
-          </div>
-        ) : (
-          <div className="relative">
-            {/* Map container */}
-            <div ref={mapContainer} className="w-full h-[350px]" />
+        <div className="relative">
+          {/* Map container */}
+          <div ref={mapContainer} className="w-full h-[350px]" />
 
-            {/* Current location button */}
-            <Button
-              size="icon"
-              variant="secondary"
-              className="absolute bottom-24 right-4 rounded-full shadow-lg"
-              onClick={getCurrentLocation}
-              disabled={isLoadingLocation}
-            >
-              {isLoadingLocation ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Navigation className="w-5 h-5" />
-              )}
-            </Button>
+          {/* Current location button */}
+          <Button
+            size="icon"
+            variant="secondary"
+            className="absolute bottom-24 right-4 rounded-full shadow-lg"
+            onClick={getCurrentLocation}
+            disabled={isLoadingLocation}
+          >
+            {isLoadingLocation ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Navigation className="w-5 h-5" />
+            )}
+          </Button>
 
-            {/* Selected address display */}
-            <div className="p-4 border-t border-border bg-card">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <MapPin className="w-5 h-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-foreground">Delivery Location</p>
-                  {isLoadingAddress ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Fetching address...
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {address || 'Tap on map to select location'}
-                    </p>
-                  )}
-                </div>
+          {/* Selected address display */}
+          <div className="p-4 border-t border-border bg-card">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <MapPin className="w-5 h-5 text-primary" />
               </div>
-
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={onClose} className="flex-1">
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleConfirmLocation} 
-                  className="flex-1"
-                  disabled={!selectedLocation || !address || isLoadingAddress}
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Confirm
-                </Button>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm text-foreground">Delivery Location</p>
+                {isLoadingAddress ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Fetching address...
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {address || 'Tap on map to select location'}
+                  </p>
+                )}
               </div>
             </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={onClose} className="flex-1">
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleConfirmLocation} 
+                className="flex-1"
+                disabled={!selectedLocation || !address || isLoadingAddress}
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Confirm
+              </Button>
+            </div>
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );
