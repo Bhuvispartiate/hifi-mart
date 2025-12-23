@@ -35,7 +35,7 @@ const Account = () => {
   const badgeLevel = getBadgeLevel(userOrdersCount);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-36">
       {/* Header */}
       <header className="bg-primary text-primary-foreground px-4 pt-8 pb-12 rounded-b-3xl">
         <h1 className="text-xl font-bold mb-6">My Account</h1>

@@ -15,7 +15,7 @@ const Home = () => {
   const discountedProducts = products.filter(p => p.discount).slice(0, 6);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-36">
       <Header onCartClick={() => setCartOpen(true)} />
 
       <main className="space-y-6 py-4">
