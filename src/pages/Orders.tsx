@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Package, ChevronRight, RefreshCw, MapPin, Clock, Loader2, Database } from 'lucide-react';
+import { Package, ChevronRight, RefreshCw, MapPin, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +10,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserOrders } from '@/hooks/useFirestoreData';
 import { useProducts } from '@/hooks/useFirestoreData';
 import { toast } from 'sonner';
-import { seedOrders } from '@/lib/firestoreService';
-import { mockOrders } from '@/data/products';
 
 const statusConfig = {
   pending: {
@@ -53,40 +50,6 @@ const Orders = () => {
   const { products } = useProducts();
   const { addItem, clearCart } = useCart();
   const navigate = useNavigate();
-  const [isSeeding, setIsSeeding] = useState(false);
-
-  const handleSeedOrders = async () => {
-    if (!user) {
-      toast.error('Please login first');
-      return;
-    }
-
-    setIsSeeding(true);
-    try {
-      // Update mock orders with current user's ID
-      const ordersWithUserId = mockOrders.map((order, index) => ({
-        ...order,
-        id: `${user.uid}_order_${index + 1}`,
-        userId: user.uid,
-      }));
-
-      const success = await seedOrders(ordersWithUserId);
-      if (success) {
-        toast.success('Mock orders seeded!', {
-          description: `${mockOrders.length} orders added. Refresh to see them.`,
-        });
-        // Reload the page to show new orders
-        window.location.reload();
-      } else {
-        toast.error('Failed to seed orders');
-      }
-    } catch (error) {
-      console.error('Seed error:', error);
-      toast.error('Failed to seed orders');
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   const handleReorder = (order: typeof orders[0]) => {
     // Clear cart first
@@ -139,28 +102,9 @@ const Orders = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Start shopping to see your orders here
             </p>
-            <div className="flex flex-col gap-2">
-              <Link to="/">
-                <Button>Start Shopping</Button>
-              </Link>
-              <Button 
-                variant="outline" 
-                onClick={handleSeedOrders}
-                disabled={isSeeding}
-              >
-                {isSeeding ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Seeding...
-                  </>
-                ) : (
-                  <>
-                    <Database className="w-4 h-4 mr-2" />
-                    Load Demo Orders
-                  </>
-                )}
-              </Button>
-            </div>
+            <Link to="/">
+              <Button>Start Shopping</Button>
+            </Link>
           </div>
         ) : (
           <div className="space-y-4">
