@@ -1,7 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { ArrowLeft, Phone, MessageCircle, Clock, Package, CheckCircle, Truck, MapPin, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,11 +23,6 @@ interface TimelineStep {
   completed: boolean;
 }
 
-interface Location {
-  lat: number;
-  lng: number;
-}
-
 interface Order {
   id: string;
   status: string;
@@ -40,8 +32,6 @@ interface Order {
   deliveryPartner?: DeliveryPartner;
   timeline: TimelineStep[];
   eta?: string;
-  partnerLocation?: Location;
-  destinationLocation?: Location;
   cancelledReason?: string;
 }
 
@@ -77,8 +67,6 @@ const mockOrderData: Record<string, Order> = {
     ],
     deliveryAddress: '456, Palm Grove Society, HSR Layout, Bangalore - 560102',
     deliveryPartner: { name: 'Suresh Babu', phone: '+91 87654 32109', rating: 4.9 },
-    partnerLocation: { lat: 12.9352, lng: 77.6245 },
-    destinationLocation: { lat: 12.9141, lng: 77.6411 },
     timeline: [
       { status: 'Order Placed', time: '11:30 AM', completed: true },
       { status: 'Order Confirmed', time: '11:32 AM', completed: true },
@@ -104,103 +92,8 @@ const mockOrderData: Record<string, Order> = {
 const OrderStatus = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const partnerMarker = useRef<mapboxgl.Marker | null>(null);
-  
-const [isMapReady, setIsMapReady] = useState(false);
-  const [partnerLocation, setPartnerLocation] = useState({ lat: 12.9352, lng: 77.6245 });
 
   const order = mockOrderData[orderId as keyof typeof mockOrderData];
-
-  // Simulate delivery partner movement
-  useEffect(() => {
-    if (order?.status !== 'out_for_delivery' || !isMapReady) return;
-
-    const destination = order.destinationLocation;
-    const interval = setInterval(() => {
-      setPartnerLocation(prev => {
-        const latDiff = destination.lat - prev.lat;
-        const lngDiff = destination.lng - prev.lng;
-        
-        // Move 5% closer to destination each time
-        return {
-          lat: prev.lat + latDiff * 0.05,
-          lng: prev.lng + lngDiff * 0.05,
-        };
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [order?.status, isMapReady]);
-
-  // Update marker position when partner moves
-  useEffect(() => {
-    if (partnerMarker.current && isMapReady) {
-      partnerMarker.current.setLngLat([partnerLocation.lng, partnerLocation.lat]);
-    }
-  }, [partnerLocation, isMapReady]);
-
-  // Initialize map with public demo token
-  useEffect(() => {
-    if (!mapContainer.current || order?.status !== 'out_for_delivery') return;
-
-    // Using a public demo token for live tracking
-    mapboxgl.accessToken = 'pk.eyJ1IjoibG92YWJsZS1kZW1vIiwiYSI6ImNtNjVxd3BxbjBhMGoya3B0cTZpNnRqMGwifQ.demo';
-
-    try {
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [order.partnerLocation!.lng, order.partnerLocation!.lat],
-        zoom: 14,
-      });
-
-      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-      map.current.on('load', () => {
-        // Add destination marker
-        new mapboxgl.Marker({ color: '#0C831F' })
-          .setLngLat([order.destinationLocation!.lng, order.destinationLocation!.lat])
-          .setPopup(new mapboxgl.Popup().setHTML('<p class="font-medium">Delivery Location</p>'))
-          .addTo(map.current!);
-
-        // Add delivery partner marker (bike icon)
-        const el = document.createElement('div');
-        el.className = 'delivery-marker';
-        el.innerHTML = `
-          <div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="18.5" cy="17.5" r="3.5"></circle>
-              <circle cx="5.5" cy="17.5" r="3.5"></circle>
-              <circle cx="15" cy="5" r="1"></circle>
-              <path d="M12 17.5V14l-3-3 4-3 2 3h2"></path>
-            </svg>
-          </div>
-        `;
-
-        partnerMarker.current = new mapboxgl.Marker(el)
-          .setLngLat([order.partnerLocation!.lng, order.partnerLocation!.lat])
-          .setPopup(new mapboxgl.Popup().setHTML(`<p class="font-medium">${order.deliveryPartner!.name}</p>`))
-          .addTo(map.current!);
-
-        setIsMapReady(true);
-
-        // Fit bounds to show both markers
-        const bounds = new mapboxgl.LngLatBounds()
-          .extend([order.partnerLocation!.lng, order.partnerLocation!.lat])
-          .extend([order.destinationLocation!.lng, order.destinationLocation!.lat]);
-        
-        map.current!.fitBounds(bounds, { padding: 60 });
-      });
-    } catch (error) {
-      console.error('Error initializing map:', error);
-    }
-
-    return () => {
-      map.current?.remove();
-    };
-  }, [order]);
 
   if (!order) {
     return (
@@ -214,8 +107,6 @@ const [isMapReady, setIsMapReady] = useState(false);
       </div>
     );
   }
-
-  const showMap = order.status === 'out_for_delivery';
 
   return (
     <div className="min-h-screen bg-background pb-6">
@@ -232,13 +123,10 @@ const [isMapReady, setIsMapReady] = useState(false);
         </div>
       </div>
 
-      {/* Map Section for Out for Delivery */}
-      {showMap && (
-        <div className="relative h-64">
-          <div ref={mapContainer} className="absolute inset-0" />
-          
-          {/* ETA Overlay */}
-          <div className="absolute bottom-4 left-4 right-4 bg-card rounded-xl p-3 shadow-lg border border-border">
+      {/* ETA Card for Out for Delivery */}
+      {order.status === 'out_for_delivery' && order.eta && (
+        <div className="p-4">
+          <Card className="p-4 bg-primary/5 border-primary/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -251,7 +139,7 @@ const [isMapReady, setIsMapReady] = useState(false);
               </div>
               <Badge className="bg-primary text-primary-foreground">Live</Badge>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
