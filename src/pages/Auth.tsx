@@ -13,6 +13,7 @@ type AuthStep = 'phone' | 'otp';
 const Auth = () => {
   const [step, setStep] = useState<AuthStep>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [fullPhoneNumber, setFullPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const { user, sendOTP, verifyOTP, demoLogin, isDemoMode } = useAuth();
@@ -47,7 +48,8 @@ const Auth = () => {
 
     setLoading(true);
     const fullPhone = `+91${phoneNumber}`;
-    const result = await sendOTP(fullPhone, 'recaptcha-container');
+    setFullPhoneNumber(fullPhone);
+    const result = await sendOTP(fullPhone);
     setLoading(false);
 
     if (result.success) {
@@ -77,7 +79,7 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const result = await verifyOTP(otp);
+    const result = await verifyOTP(fullPhoneNumber, otp);
     setLoading(false);
 
     if (result.success) {
@@ -106,7 +108,6 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background flex flex-col items-center justify-center p-4">
-      <div id="recaptcha-container" />
       
       {/* Logo */}
       <div className="flex items-center gap-2 mb-8">
