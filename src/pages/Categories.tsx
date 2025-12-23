@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, SlidersHorizontal, ChevronLeft, ShoppingCart } from 'lucide-react';
+import { Search, SlidersHorizontal, ChevronLeft, ShoppingCart, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { ProductCard } from '@/components/grocery/ProductCard';
 import { CartDrawer } from '@/components/grocery/CartDrawer';
 import { BottomNav } from '@/components/grocery/BottomNav';
 import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
-import { categories, products } from '@/data/products';
+import { useProducts, useCategories } from '@/hooks/useFirestoreData';
 import { useCart } from '@/contexts/CartContext';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -19,6 +19,8 @@ const Categories = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
   const { totalItems } = useCart();
+  const { products, loading: productsLoading } = useProducts();
+  const { categories, loading: categoriesLoading } = useCategories();
 
   const filteredProducts = useMemo(() => {
     let filtered = products;
@@ -37,7 +39,7 @@ const Categories = () => {
     }
     
     return filtered;
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, products]);
 
   const handleCategoryClick = (catId: string) => {
     if (catId === 'all') {
@@ -46,6 +48,16 @@ const Categories = () => {
       setSearchParams({ cat: catId });
     }
   };
+
+  const isLoading = productsLoading || categoriesLoading;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-36">

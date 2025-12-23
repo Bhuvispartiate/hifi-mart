@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Product } from '@/data/products';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { Product } from '@/lib/firestoreService';
+import { getUserCart, saveUserCart, clearUserCart, CartItem as FirestoreCartItem, getProductById } from '@/lib/firestoreService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface CartItem extends Product {
   quantity: number;
@@ -14,12 +16,63 @@ interface CartContextType {
   totalItems: number;
   totalPrice: number;
   deliveryFee: number;
+  loading: boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+
+  // Load cart from Firestore when user logs in
+  useEffect(() => {
+    const loadCart = async () => {
+      if (user) {
+        setLoading(true);
+        try {
+          const cartItems = await getUserCart(user.uid);
+          if (cartItems.length > 0) {
+            // Fetch full product details for each cart item
+            const fullItems: CartItem[] = [];
+            for (const item of cartItems) {
+              const product = await getProductById(item.productId);
+              if (product) {
+                fullItems.push({ ...product, quantity: item.quantity });
+              }
+            }
+            setItems(fullItems);
+          }
+        } catch (error) {
+          console.error('Error loading cart:', error);
+        }
+        setLoading(false);
+      } else {
+        // Clear cart when user logs out
+        setItems([]);
+      }
+    };
+
+    loadCart();
+  }, [user]);
+
+  // Save cart to Firestore whenever it changes (for logged-in users)
+  useEffect(() => {
+    const saveCart = async () => {
+      if (user && items.length > 0) {
+        const cartItems: FirestoreCartItem[] = items.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+        }));
+        await saveUserCart(user.uid, cartItems);
+      }
+    };
+
+    // Debounce save to avoid too many writes
+    const timeoutId = setTimeout(saveCart, 500);
+    return () => clearTimeout(timeoutId);
+  }, [items, user]);
 
   const addItem = (product: Product) => {
     setItems((prev) => {
@@ -51,8 +104,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const clearCart = () => {
+  const clearCart = async () => {
     setItems([]);
+    if (user) {
+      await clearUserCart(user.uid);
+    }
   };
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -70,6 +126,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         totalItems,
         totalPrice,
         deliveryFee,
+        loading,
       }}
     >
       {children}
