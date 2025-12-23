@@ -5,6 +5,7 @@ import { CategoryCard } from '@/components/grocery/CategoryCard';
 import { ProductCard } from '@/components/grocery/ProductCard';
 import { CartDrawer } from '@/components/grocery/CartDrawer';
 import { BottomNav } from '@/components/grocery/BottomNav';
+import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
 import { categories, products } from '@/data/products';
 
 const Home = () => {
@@ -82,6 +83,7 @@ const Home = () => {
         </section>
       </main>
 
+      <DeliveryActionBar />
       <BottomNav />
       <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
     </div>

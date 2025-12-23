@@ -15,6 +15,8 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { BottomNav } from '@/components/grocery/BottomNav';
+import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
+import { CustomerBadge, getBadgeLevel } from '@/components/grocery/CustomerBadge';
 import { Link } from 'react-router-dom';
 
 const menuItems = [
@@ -26,7 +28,12 @@ const menuItems = [
   { icon: HelpCircle, label: 'Help & Support', description: 'FAQs, Contact us', link: '#' },
 ];
 
+// Mock user data - in production this would come from auth context
+const userOrdersCount = 12;
+
 const Account = () => {
+  const badgeLevel = getBadgeLevel(userOrdersCount);
+
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* Header */}
@@ -40,13 +47,19 @@ const Account = () => {
               <User className="w-8 h-8 text-primary" />
             </div>
             <div className="flex-1">
-              <h2 className="font-semibold text-foreground text-lg">John Doe</h2>
+              <div className="flex items-center gap-2 mb-0.5">
+                <h2 className="font-semibold text-foreground text-lg">John Doe</h2>
+                <CustomerBadge level={badgeLevel} showLabel={false} className="py-0.5" />
+              </div>
               <p className="text-sm text-muted-foreground">+91 98765 43210</p>
               <p className="text-xs text-muted-foreground">john.doe@email.com</p>
             </div>
             <Button variant="ghost" size="icon">
               <Edit2 className="w-4 h-4 text-muted-foreground" />
             </Button>
+          </div>
+          <div className="mt-3 pt-3 border-t border-border">
+            <CustomerBadge level={badgeLevel} ordersCount={userOrdersCount} />
           </div>
         </Card>
       </header>
@@ -139,6 +152,7 @@ const Account = () => {
         </p>
       </main>
 
+      <DeliveryActionBar />
       <BottomNav />
     </div>
   );
