@@ -149,10 +149,12 @@ const Orders = () => {
                       <RefreshCw className="w-3.5 h-3.5 mr-1" />
                       Reorder
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-primary">
-                      View Details
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
+                    <Link to={`/order/${order.id}`}>
+                      <Button variant="ghost" size="sm" className="text-primary">
+                        {order.status === 'on_the_way' ? 'Track Order' : 'View Details'}
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </Link>
                   </div>
                 </Card>
               );
