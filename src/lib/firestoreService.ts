@@ -388,3 +388,22 @@ export const seedReviews = async (reviews: Review[]): Promise<boolean> => {
     return false;
   }
 };
+
+export const seedOrders = async (orders: Array<Omit<Order, 'createdAt'> & { id: string }>): Promise<boolean> => {
+  try {
+    const batch = writeBatch(db);
+    orders.forEach((order) => {
+      const { id, ...orderData } = order;
+      const docRef = doc(db, 'orders', id);
+      batch.set(docRef, {
+        ...orderData,
+        createdAt: Timestamp.now(),
+      });
+    });
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error('Error seeding orders:', error);
+    return false;
+  }
+};
