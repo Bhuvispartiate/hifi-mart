@@ -22,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
+
 import { getUserAddresses, UserAddress } from '@/lib/userProfile';
 import { createOrder as createFirestoreOrder } from '@/lib/firestoreService';
 import { LocationPicker } from '@/components/checkout/LocationPicker';
@@ -457,8 +457,6 @@ const Checkout = () => {
           setSelectedAddress(''); // Clear saved address selection
         }}
       />
-
-      <DeliveryActionBar />
     </div>
   );
 };
