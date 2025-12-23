@@ -9,6 +9,7 @@ import {
   Minus,
   Banknote,
   Loader2,
+  Navigation,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
 import { getUserAddresses, UserAddress } from '@/lib/userProfile';
 import { createOrder as createFirestoreOrder } from '@/lib/firestoreService';
+import { LocationPicker } from '@/components/checkout/LocationPicker';
 
 const paymentMethods = [
   { id: 'cod', label: 'Cash on Delivery', icon: Banknote, description: 'Pay when delivered' },
@@ -41,6 +43,8 @@ const Checkout = () => {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
 
   const grandTotal = totalPrice + deliveryFee - discount;
 
@@ -106,14 +110,19 @@ const Checkout = () => {
     }
 
     const selectedAddr = addresses.find(a => a.id === selectedAddress);
-    if (!selectedAddr) {
+    
+    // Check if we have either a saved address or a pinned location
+    if (!selectedAddr && !pinnedLocation) {
       toast({
         title: 'Select address',
-        description: 'Please select a delivery address',
+        description: 'Please select a delivery address or pin a location on the map',
         variant: 'destructive',
       });
       return;
     }
+
+    // Use pinned location address if available, otherwise use saved address
+    const deliveryAddress = pinnedLocation?.address || selectedAddr?.fullAddress || '';
 
     setIsPlacingOrder(true);
     
@@ -130,7 +139,8 @@ const Checkout = () => {
           price: item.price,
           productId: item.id,
         })),
-        deliveryAddress: selectedAddr.fullAddress,
+        deliveryAddress: deliveryAddress,
+        deliveryCoordinates: pinnedLocation ? { lat: pinnedLocation.lat, lng: pinnedLocation.lng } : undefined,
         timeline: [
           { status: 'Order Placed', time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), completed: true },
           { status: 'Order Confirmed', time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), completed: true },
@@ -198,11 +208,53 @@ const Checkout = () => {
       </header>
 
       <main className="p-4 space-y-4">
-        {/* Delivery Address */}
+        {/* Pin Location on Map */}
+        <Card className="p-4 border border-border rounded-xl">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Navigation className="w-5 h-5 text-primary" />
+              <h2 className="font-semibold text-foreground">Pin Your Location</h2>
+            </div>
+          </div>
+          
+          {pinnedLocation ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 rounded-lg border border-primary bg-primary/5">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-foreground">Pinned Location</p>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{pinnedLocation.address}</p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => setShowLocationPicker(true)}
+              >
+                <MapPin className="w-4 h-4 mr-2" />
+                Change Location
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              variant="outline" 
+              className="w-full h-20 border-dashed flex flex-col gap-1"
+              onClick={() => setShowLocationPicker(true)}
+            >
+              <MapPin className="w-6 h-6 text-primary" />
+              <span className="text-sm">Tap to pin your delivery location on map</span>
+            </Button>
+          )}
+        </Card>
+
+        {/* Or Select Saved Address */}
         <Card className="p-4 border border-border rounded-xl">
           <div className="flex items-center gap-2 mb-3">
-            <MapPin className="w-5 h-5 text-primary" />
-            <h2 className="font-semibold text-foreground">Delivery Address</h2>
+            <MapPin className="w-5 h-5 text-muted-foreground" />
+            <h2 className="font-semibold text-foreground">Or Select Saved Address</h2>
           </div>
           
           {loadingAddresses ? (
@@ -217,17 +269,26 @@ const Checkout = () => {
               </Link>
             </div>
           ) : (
-            <RadioGroup value={selectedAddress} onValueChange={setSelectedAddress}>
+            <RadioGroup 
+              value={pinnedLocation ? '' : selectedAddress} 
+              onValueChange={(value) => {
+                setSelectedAddress(value);
+                setPinnedLocation(null); // Clear pinned location when selecting saved address
+              }}
+            >
               {addresses.map((addr) => (
                 <div
                   key={addr.id}
                   className={cn(
                     'flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
-                    selectedAddress === addr.id
+                    !pinnedLocation && selectedAddress === addr.id
                       ? 'border-primary bg-primary/5'
                       : 'border-border'
                   )}
-                  onClick={() => setSelectedAddress(addr.id)}
+                  onClick={() => {
+                    setSelectedAddress(addr.id);
+                    setPinnedLocation(null);
+                  }}
                 >
                   <RadioGroupItem value={addr.id} id={addr.id} className="mt-0.5" />
                   <div className="flex-1">
@@ -374,7 +435,7 @@ const Checkout = () => {
         <Button
           className="w-full h-12 text-base font-semibold"
           onClick={placeOrder}
-          disabled={isPlacingOrder || addresses.length === 0}
+          disabled={isPlacingOrder || (!pinnedLocation && addresses.length === 0)}
         >
           {isPlacingOrder ? (
             <>
@@ -386,6 +447,16 @@ const Checkout = () => {
           )}
         </Button>
       </div>
+
+      {/* Location Picker Modal */}
+      <LocationPicker
+        open={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        onLocationSelect={(location) => {
+          setPinnedLocation(location);
+          setSelectedAddress(''); // Clear saved address selection
+        }}
+      />
 
       <DeliveryActionBar />
     </div>
