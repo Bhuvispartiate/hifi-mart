@@ -17,7 +17,9 @@ import { Switch } from '@/components/ui/switch';
 import { BottomNav } from '@/components/grocery/BottomNav';
 import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
 import { CustomerBadge, getBadgeLevel } from '@/components/grocery/CustomerBadge';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 const menuItems = [
   { icon: MapPin, label: 'Saved Addresses', description: '2 addresses saved', link: '#' },
@@ -33,6 +35,45 @@ const userOrdersCount = 12;
 
 const Account = () => {
   const badgeLevel = getBadgeLevel(userOrdersCount);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    await logout();
+    toast({
+      title: 'Logged out',
+      description: 'You have been successfully logged out',
+    });
+    navigate('/auth');
+  };
+
+  // If not logged in, show login prompt
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background pb-36">
+        <header className="bg-primary text-primary-foreground px-4 pt-8 pb-12 rounded-b-3xl">
+          <h1 className="text-xl font-bold mb-6">My Account</h1>
+        </header>
+        
+        <main className="p-4 pt-8 flex flex-col items-center justify-center gap-4">
+          <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center">
+            <User className="w-10 h-10 text-muted-foreground" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">Welcome to FreshMart</h2>
+          <p className="text-sm text-muted-foreground text-center">
+            Login to view your orders, saved addresses, and more
+          </p>
+          <Button onClick={() => navigate('/auth')} className="w-full max-w-xs">
+            Login / Sign Up
+          </Button>
+        </main>
+
+        <DeliveryActionBar />
+        <BottomNav />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-36">
@@ -48,11 +89,12 @@ const Account = () => {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-0.5">
-                <h2 className="font-semibold text-foreground text-lg">John Doe</h2>
+                <h2 className="font-semibold text-foreground text-lg">
+                  {user.displayName || 'User'}
+                </h2>
                 <CustomerBadge level={badgeLevel} showLabel={false} className="py-0.5" />
               </div>
-              <p className="text-sm text-muted-foreground">+91 98765 43210</p>
-              <p className="text-xs text-muted-foreground">john.doe@email.com</p>
+              <p className="text-sm text-muted-foreground">{user.phoneNumber}</p>
             </div>
             <Button variant="ghost" size="icon">
               <Edit2 className="w-4 h-4 text-muted-foreground" />
@@ -141,6 +183,7 @@ const Account = () => {
         <Button
           variant="outline"
           className="w-full h-12 text-destructive border-destructive/30 hover:bg-destructive/10"
+          onClick={handleLogout}
         >
           <LogOut className="w-4 h-4 mr-2" />
           Logout
