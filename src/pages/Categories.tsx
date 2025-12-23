@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, SlidersHorizontal, ChevronLeft, ShoppingCart, Loader2 } from 'lucide-react';
+import { Search, ChevronLeft, ShoppingCart, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { ProductCard } from '@/components/grocery/ProductCard';
 import { CartDrawer } from '@/components/grocery/CartDrawer';
 import { BottomNav } from '@/components/grocery/BottomNav';
 import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
+import { ProductFilters } from '@/components/grocery/ProductFilters';
 import { useProducts, useCategories } from '@/hooks/useFirestoreData';
 import { useCart } from '@/contexts/CartContext';
 import { cn } from '@/lib/utils';
@@ -15,20 +16,41 @@ import { Link } from 'react-router-dom';
 
 const Categories = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const selectedCategory = searchParams.get('cat') || 'all';
+  const initialCategory = searchParams.get('cat');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    initialCategory ? [initialCategory] : []
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
   const { totalItems } = useCart();
   const { products, loading: productsLoading } = useProducts();
   const { categories, loading: categoriesLoading } = useCategories();
 
+  const maxPrice = useMemo(() => {
+    if (products.length === 0) return 1000;
+    return Math.ceil(Math.max(...products.map(p => p.price)) / 100) * 100;
+  }, [products]);
+
+  // Initialize price range with actual max price
+  useMemo(() => {
+    if (maxPrice > 0 && priceRange[1] === 1000) {
+      setPriceRange([0, maxPrice]);
+    }
+  }, [maxPrice]);
+
   const filteredProducts = useMemo(() => {
     let filtered = products;
     
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(p => p.category === selectedCategory);
+    // Filter by categories
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(p => selectedCategories.includes(p.category));
     }
     
+    // Filter by price range
+    filtered = filtered.filter(p => p.price >= priceRange[0] && p.price <= priceRange[1]);
+    
+    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -39,15 +61,37 @@ const Categories = () => {
     }
     
     return filtered;
-  }, [selectedCategory, searchQuery, products]);
+  }, [selectedCategories, searchQuery, products, priceRange]);
 
   const handleCategoryClick = (catId: string) => {
     if (catId === 'all') {
+      setSelectedCategories([]);
       setSearchParams({});
     } else {
-      setSearchParams({ cat: catId });
+      const newCategories = selectedCategories.includes(catId)
+        ? selectedCategories.filter(c => c !== catId)
+        : [...selectedCategories, catId];
+      setSelectedCategories(newCategories);
+      if (newCategories.length === 0) {
+        setSearchParams({});
+      } else {
+        setSearchParams({ cat: newCategories[0] });
+      }
     }
   };
+
+  const handleResetFilters = () => {
+    setSelectedCategories([]);
+    setPriceRange([0, maxPrice]);
+    setSearchParams({});
+  };
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (selectedCategories.length > 0) count += selectedCategories.length;
+    if (priceRange[0] > 0 || priceRange[1] < maxPrice) count += 1;
+    return count;
+  }, [selectedCategories, priceRange, maxPrice]);
 
   const isLoading = productsLoading || categoriesLoading;
 
@@ -97,10 +141,10 @@ const Categories = () => {
         <div className="overflow-x-auto hide-scrollbar -mx-4 px-4">
           <div className="flex gap-2 pb-1" style={{ width: 'max-content' }}>
             <Badge
-              variant={selectedCategory === 'all' ? 'default' : 'secondary'}
+              variant={selectedCategories.length === 0 ? 'default' : 'secondary'}
               className={cn(
                 'px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors',
-                selectedCategory === 'all'
+                selectedCategories.length === 0
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
               )}
@@ -111,10 +155,10 @@ const Categories = () => {
             {categories.map((cat) => (
               <Badge
                 key={cat.id}
-                variant={selectedCategory === cat.id ? 'default' : 'secondary'}
+                variant={selectedCategories.includes(cat.id) ? 'default' : 'secondary'}
                 className={cn(
                   'px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors whitespace-nowrap',
-                  selectedCategory === cat.id
+                  selectedCategories.includes(cat.id)
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                 )}
@@ -133,10 +177,16 @@ const Categories = () => {
           <p className="text-sm text-muted-foreground">
             {filteredProducts.length} products found
           </p>
-          <Button variant="ghost" size="sm" className="text-xs">
-            <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
-            Filters
-          </Button>
+          <ProductFilters
+            categories={categories}
+            selectedCategories={selectedCategories}
+            onCategoriesChange={setSelectedCategories}
+            priceRange={priceRange}
+            onPriceRangeChange={setPriceRange}
+            maxPrice={maxPrice}
+            onReset={handleResetFilters}
+            activeFiltersCount={activeFiltersCount}
+          />
         </div>
 
         {filteredProducts.length === 0 ? (
