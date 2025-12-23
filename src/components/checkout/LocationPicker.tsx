@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Navigation, X, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 interface LocationPickerProps {
   open: boolean;
@@ -23,6 +23,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
   const [address, setAddress] = useState('');
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   // Reverse geocode to get address
   const fetchAddress = useCallback(async (lat: number, lng: number) => {
@@ -83,74 +84,96 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
     }
   }, [fetchAddress]);
 
-  // Initialize map
+  // Initialize map when dialog opens
   useEffect(() => {
-    if (!open || !mapContainer.current || map.current) return;
-
-    mapboxgl.accessToken = MAPBOX_TOKEN;
-
-    const initialLat = initialLocation?.lat || 28.6139;
-    const initialLng = initialLocation?.lng || 77.2090;
-
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [initialLng, initialLat],
-      zoom: 14,
-    });
-
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    // Create custom marker element
-    const markerEl = document.createElement('div');
-    markerEl.innerHTML = `
-      <div style="
-        width: 40px; 
-        height: 40px; 
-        background: hsl(130, 85%, 28%); 
-        border-radius: 50% 50% 50% 0; 
-        transform: rotate(-45deg);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      ">
-        <div style="transform: rotate(45deg); color: white; font-size: 18px;">📍</div>
-      </div>
-    `;
-
-    // Add draggable marker
-    marker.current = new mapboxgl.Marker({
-      element: markerEl,
-      draggable: true,
-    })
-      .setLngLat([initialLng, initialLat])
-      .addTo(map.current);
-
-    // Handle marker drag end
-    marker.current.on('dragend', () => {
-      const lngLat = marker.current?.getLngLat();
-      if (lngLat) {
-        setSelectedLocation({ lat: lngLat.lat, lng: lngLat.lng });
-        fetchAddress(lngLat.lat, lngLat.lng);
+    if (!open) {
+      // Cleanup when dialog closes
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+        marker.current = null;
+        setMapLoaded(false);
       }
-    });
+      return;
+    }
 
-    // Handle map click to move marker
-    map.current.on('click', (e) => {
-      const { lng, lat } = e.lngLat;
-      marker.current?.setLngLat([lng, lat]);
-      setSelectedLocation({ lat, lng });
-      fetchAddress(lat, lng);
-    });
+    // Small delay to ensure the container is rendered
+    const initTimeout = setTimeout(() => {
+      if (!mapContainer.current || map.current) return;
 
-    // Get current location on load
-    getCurrentLocation();
+      try {
+        mapboxgl.accessToken = MAPBOX_TOKEN;
+
+        const initialLat = initialLocation?.lat || 28.6139;
+        const initialLng = initialLocation?.lng || 77.2090;
+
+        map.current = new mapboxgl.Map({
+          container: mapContainer.current,
+          style: 'mapbox://styles/mapbox/streets-v12',
+          center: [initialLng, initialLat],
+          zoom: 14,
+        });
+
+        // Add navigation controls
+        map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+        // Create custom marker element
+        const markerEl = document.createElement('div');
+        markerEl.innerHTML = `
+          <div style="
+            width: 40px; 
+            height: 40px; 
+            background: hsl(130, 85%, 28%); 
+            border-radius: 50% 50% 50% 0; 
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+          ">
+            <div style="transform: rotate(45deg); color: white; font-size: 18px;">📍</div>
+          </div>
+        `;
+
+        // Add draggable marker
+        marker.current = new mapboxgl.Marker({
+          element: markerEl,
+          draggable: true,
+        })
+          .setLngLat([initialLng, initialLat])
+          .addTo(map.current);
+
+        // Handle marker drag end
+        marker.current.on('dragend', () => {
+          const lngLat = marker.current?.getLngLat();
+          if (lngLat) {
+            setSelectedLocation({ lat: lngLat.lat, lng: lngLat.lng });
+            fetchAddress(lngLat.lat, lngLat.lng);
+          }
+        });
+
+        // Handle map click to move marker
+        map.current.on('click', (e) => {
+          const { lng, lat } = e.lngLat;
+          marker.current?.setLngLat([lng, lat]);
+          setSelectedLocation({ lat, lng });
+          fetchAddress(lat, lng);
+        });
+
+        // Map load event
+        map.current.on('load', () => {
+          setMapLoaded(true);
+          // Get current location after map loads
+          getCurrentLocation();
+        });
+
+      } catch (error) {
+        console.error('Map initialization error:', error);
+      }
+    }, 100);
 
     return () => {
-      map.current?.remove();
-      map.current = null;
+      clearTimeout(initTimeout);
     };
   }, [open, initialLocation, getCurrentLocation, fetchAddress]);
 
@@ -167,23 +190,40 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
+      <DialogContent className="max-w-lg p-0 overflow-hidden" aria-describedby="location-picker-description">
         <DialogHeader className="p-4 pb-2">
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-primary" />
             Select Delivery Location
           </DialogTitle>
+          <DialogDescription id="location-picker-description" className="sr-only">
+            Pin your delivery location on the map by tapping or dragging the marker
+          </DialogDescription>
         </DialogHeader>
 
         <div className="relative">
           {/* Map container */}
-          <div ref={mapContainer} className="w-full h-[350px]" />
+          <div 
+            ref={mapContainer} 
+            className="w-full h-[350px] bg-muted"
+            style={{ minHeight: '350px' }}
+          />
+
+          {/* Loading overlay */}
+          {!mapLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Loading map...</span>
+              </div>
+            </div>
+          )}
 
           {/* Current location button */}
           <Button
             size="icon"
             variant="secondary"
-            className="absolute bottom-24 right-4 rounded-full shadow-lg"
+            className="absolute bottom-24 right-4 rounded-full shadow-lg z-10"
             onClick={getCurrentLocation}
             disabled={isLoadingLocation}
           >
