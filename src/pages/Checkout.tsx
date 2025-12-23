@@ -4,12 +4,10 @@ import {
   ChevronLeft,
   MapPin,
   Clock,
-  CreditCard,
-  Wallet,
-  Building2,
   CheckCircle2,
   Plus,
   Minus,
+  Banknote,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -28,10 +26,7 @@ const addresses = [
 ];
 
 const paymentMethods = [
-  { id: 'upi', label: 'UPI', icon: Wallet, description: 'GPay, PhonePe, Paytm' },
-  { id: 'card', label: 'Credit/Debit Card', icon: CreditCard, description: 'Visa, Mastercard, RuPay' },
-  { id: 'netbanking', label: 'Net Banking', icon: Building2, description: 'All major banks' },
-  { id: 'cod', label: 'Cash on Delivery', icon: Clock, description: 'Pay when delivered' },
+  { id: 'cod', label: 'Cash on Delivery', icon: Banknote, description: 'Pay when delivered' },
 ];
 
 const Checkout = () => {
@@ -39,7 +34,7 @@ const Checkout = () => {
   const { items, totalPrice, deliveryFee, clearCart, updateQuantity } = useCart();
   const { toast } = useToast();
   const [selectedAddress, setSelectedAddress] = useState('1');
-  const [selectedPayment, setSelectedPayment] = useState('upi');
+  const [selectedPayment, setSelectedPayment] = useState('cod');
   const [couponCode, setCouponCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
