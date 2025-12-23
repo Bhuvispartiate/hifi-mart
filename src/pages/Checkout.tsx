@@ -19,6 +19,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
 
 const addresses = [
   { id: '1', label: 'Home', address: '123, Green Park, New Delhi - 110016', isDefault: true },
@@ -281,6 +282,8 @@ const Checkout = () => {
           {isPlacingOrder ? 'Placing Order...' : `Pay ₹${grandTotal}`}
         </Button>
       </div>
+
+      <DeliveryActionBar />
     </div>
   );
 };

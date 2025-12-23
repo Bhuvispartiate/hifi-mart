@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/grocery/BottomNav';
+import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
 import { offers } from '@/data/products';
 import { useToast } from '@/hooks/use-toast';
 
@@ -174,6 +175,7 @@ const Offers = () => {
         </section>
       </main>
 
+      <DeliveryActionBar />
       <BottomNav />
     </div>
   );

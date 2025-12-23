@@ -1,17 +1,17 @@
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, SlidersHorizontal, ChevronLeft } from 'lucide-react';
+import { Search, SlidersHorizontal, ChevronLeft, ShoppingCart } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ProductCard } from '@/components/grocery/ProductCard';
 import { CartDrawer } from '@/components/grocery/CartDrawer';
 import { BottomNav } from '@/components/grocery/BottomNav';
+import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
 import { categories, products } from '@/data/products';
 import { useCart } from '@/contexts/CartContext';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
-import { ShoppingCart } from 'lucide-react';
 
 const Categories = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -146,6 +146,7 @@ const Categories = () => {
         )}
       </main>
 
+      <DeliveryActionBar />
       <BottomNav />
       <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
     </div>
