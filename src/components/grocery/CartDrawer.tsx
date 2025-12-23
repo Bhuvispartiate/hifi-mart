@@ -19,8 +19,16 @@ export const CartDrawer = ({ open, onOpenChange }: CartDrawerProps) => {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md flex flex-col p-0">
         <SheetHeader className="px-4 py-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-lg font-semibold">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onOpenChange(false)}
+              className="h-8 w-8"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+            <SheetTitle className="text-lg font-semibold flex-1">
               Your Cart {items.length > 0 && `(${items.length})`}
             </SheetTitle>
             {!isEmpty && (

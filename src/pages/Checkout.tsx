@@ -225,7 +225,7 @@ const Checkout = () => {
         </Card>
 
         {/* Payment Method */}
-        <Card className="p-4 border border-border rounded-xl">
+        <Card className="p-4 border border-border rounded-xl mb-8">
           <h2 className="font-semibold text-foreground mb-3">Payment Method</h2>
           <RadioGroup value={selectedPayment} onValueChange={setSelectedPayment}>
             {paymentMethods.map((method) => (
