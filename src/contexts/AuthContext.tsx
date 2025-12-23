@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { auth, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from '@/lib/firebase';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { supabase } from '@/lib/supabase';
+import { User, Session } from '@supabase/supabase-js';
 
 interface AuthUser {
   uid: string;
@@ -12,8 +12,8 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   isDemoMode: boolean;
-  sendOTP: (phoneNumber: string, recaptchaContainerId: string) => Promise<{ success: boolean; error?: string }>;
-  verifyOTP: (otp: string) => Promise<{ success: boolean; error?: string }>;
+  sendOTP: (phoneNumber: string) => Promise<{ success: boolean; error?: string }>;
+  verifyOTP: (phoneNumber: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   demoLogin: () => void;
   logout: () => Promise<void>;
 }
@@ -32,60 +32,68 @@ const DEMO_OTP = '123456';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [recaptchaVerifier, setRecaptchaVerifier] = useState<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
-    // Listen to Firebase auth state
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: User | null) => {
-      if (firebaseUser) {
-        const authUser: AuthUser = {
-          uid: firebaseUser.uid,
-          phoneNumber: firebaseUser.phoneNumber || '',
-          displayName: firebaseUser.displayName || undefined,
-        };
-        setUser(authUser);
-        localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
-      } else {
-        // Check for demo user
-        const storedUser = localStorage.getItem('grocery_auth_user');
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          if (parsed.uid.startsWith('demo')) {
-            setUser(parsed);
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        if (session?.user) {
+          const authUser: AuthUser = {
+            uid: session.user.id,
+            phoneNumber: session.user.phone || '',
+            displayName: session.user.user_metadata?.display_name || undefined,
+          };
+          setUser(authUser);
+          localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+        } else {
+          // Check for demo user
+          const storedUser = localStorage.getItem('grocery_auth_user');
+          if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            if (parsed.uid.startsWith('demo')) {
+              setUser(parsed);
+            } else {
+              setUser(null);
+              localStorage.removeItem('grocery_auth_user');
+            }
           } else {
             setUser(null);
-            localStorage.removeItem('grocery_auth_user');
           }
-        } else {
-          setUser(null);
         }
+        setLoading(false);
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        const authUser: AuthUser = {
+          uid: session.user.id,
+          phoneNumber: session.user.phone || '',
+          displayName: session.user.user_metadata?.display_name || undefined,
+        };
+        setUser(authUser);
       }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
-  const sendOTP = async (phoneNumber: string, recaptchaContainerId: string): Promise<{ success: boolean; error?: string }> => {
+  const sendOTP = async (phoneNumber: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // Clear existing recaptcha if any
-      if (recaptchaVerifier) {
-        recaptchaVerifier.clear();
-      }
-
-      const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
-        size: 'invisible',
-        callback: () => {
-          // reCAPTCHA solved
-        },
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: phoneNumber,
       });
       
-      setRecaptchaVerifier(verifier);
+      if (error) {
+        return { success: false, error: error.message };
+      }
       
-      const result = await signInWithPhoneNumber(auth, phoneNumber, verifier);
-      setConfirmationResult(result);
       return { success: true };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send OTP';
@@ -94,9 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const verifyOTP = async (otp: string): Promise<{ success: boolean; error?: string }> => {
+  const verifyOTP = async (phoneNumber: string, otp: string): Promise<{ success: boolean; error?: string }> => {
     // Check for demo OTP first
-    if (otp === DEMO_OTP && !confirmationResult) {
+    if (otp === DEMO_OTP && phoneNumber === '+910000000000') {
       const demoUser: AuthUser = {
         uid: 'demo-user-' + Date.now(),
         phoneNumber: '+91 00000 00000',
@@ -107,21 +115,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: true };
     }
 
-    // Real Firebase OTP verification
+    // Real Supabase OTP verification
     try {
-      if (!confirmationResult) {
-        return { success: false, error: 'Please request OTP first' };
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: phoneNumber,
+        token: otp,
+        type: 'sms',
+      });
+      
+      if (error) {
+        return { success: false, error: error.message };
       }
       
-      const result = await confirmationResult.confirm(otp);
-      const authUser: AuthUser = {
-        uid: result.user.uid,
-        phoneNumber: result.user.phoneNumber || '',
-        displayName: result.user.displayName || undefined,
-      };
-      setUser(authUser);
-      localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
-      setConfirmationResult(null);
+      if (data.user) {
+        const authUser: AuthUser = {
+          uid: data.user.id,
+          phoneNumber: data.user.phone || '',
+          displayName: data.user.user_metadata?.display_name || undefined,
+        };
+        setUser(authUser);
+        localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+      }
+      
       return { success: true };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Invalid OTP';
@@ -136,12 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await auth.signOut();
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Logout error:', error);
     }
     setUser(null);
-    setConfirmationResult(null);
+    setSession(null);
     localStorage.removeItem('grocery_auth_user');
   };
 
