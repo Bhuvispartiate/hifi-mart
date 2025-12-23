@@ -1,4 +1,5 @@
 import { Plus, Minus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,19 +30,23 @@ export const ProductCard = ({ product, className }: ProductCardProps) => {
         </Badge>
       )}
 
-      <div className="aspect-square mb-3 rounded-lg overflow-hidden bg-muted">
-        <img
-          src={product.image}
-          alt={product.name}
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
-      </div>
+      <Link to={`/product/${product.id}`}>
+        <div className="aspect-square mb-3 rounded-lg overflow-hidden bg-muted">
+          <img
+            src={product.image}
+            alt={product.name}
+            className="w-full h-full object-cover transition-transform hover:scale-105"
+            loading="lazy"
+          />
+        </div>
+      </Link>
 
       <div className="space-y-1">
-        <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-tight min-h-[2.5rem]">
-          {product.name}
-        </h3>
+        <Link to={`/product/${product.id}`}>
+          <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-tight min-h-[2.5rem] hover:text-primary transition-colors">
+            {product.name}
+          </h3>
+        </Link>
         <p className="text-xs text-muted-foreground">{product.unit}</p>
 
         <div className="flex items-center justify-between pt-1">
@@ -60,7 +65,10 @@ export const ProductCard = ({ product, className }: ProductCardProps) => {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => addItem(product)}
+              onClick={(e) => {
+                e.preventDefault();
+                addItem(product);
+              }}
               className="h-8 px-3 text-xs font-semibold border-primary text-primary hover:bg-primary hover:text-primary-foreground"
             >
               ADD
@@ -70,7 +78,10 @@ export const ProductCard = ({ product, className }: ProductCardProps) => {
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => updateQuantity(product.id, quantity - 1)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateQuantity(product.id, quantity - 1);
+                }}
                 className="h-8 w-8 text-primary-foreground hover:bg-primary/80 rounded-none"
               >
                 <Minus className="w-3 h-3" />
@@ -81,7 +92,10 @@ export const ProductCard = ({ product, className }: ProductCardProps) => {
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => updateQuantity(product.id, quantity + 1)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateQuantity(product.id, quantity + 1);
+                }}
                 className="h-8 w-8 text-primary-foreground hover:bg-primary/80 rounded-none"
               >
                 <Plus className="w-3 h-3" />
