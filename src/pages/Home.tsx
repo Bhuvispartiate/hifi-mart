@@ -6,13 +6,26 @@ import { ProductCard } from '@/components/grocery/ProductCard';
 import { CartDrawer } from '@/components/grocery/CartDrawer';
 import { BottomNav } from '@/components/grocery/BottomNav';
 import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
-import { categories, products } from '@/data/products';
+import { useProducts, useCategories } from '@/hooks/useFirestoreData';
+import { Loader2 } from 'lucide-react';
 
 const Home = () => {
   const [cartOpen, setCartOpen] = useState(false);
+  const { products, loading: productsLoading } = useProducts();
+  const { categories, loading: categoriesLoading } = useCategories();
   
   const bestSellers = products.filter(p => p.rating && p.rating >= 4.5).slice(0, 8);
   const discountedProducts = products.filter(p => p.discount).slice(0, 6);
+
+  const isLoading = productsLoading || categoriesLoading;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-36">

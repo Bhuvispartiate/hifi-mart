@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -8,6 +8,7 @@ import {
   Plus,
   Minus,
   Banknote,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,15 +17,13 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
-
-const addresses = [
-  { id: '1', label: 'Home', address: '123, Green Park, New Delhi - 110016', isDefault: true },
-  { id: '2', label: 'Office', address: '456, Cyber City, Gurugram - 122001', isDefault: false },
-];
+import { getUserAddresses, UserAddress } from '@/lib/userProfile';
+import { createOrder as createFirestoreOrder } from '@/lib/firestoreService';
 
 const paymentMethods = [
   { id: 'cod', label: 'Cash on Delivery', icon: Banknote, description: 'Pay when delivered' },
@@ -32,15 +31,38 @@ const paymentMethods = [
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { items, totalPrice, deliveryFee, clearCart, updateQuantity } = useCart();
   const { toast } = useToast();
-  const [selectedAddress, setSelectedAddress] = useState('1');
+  const [selectedAddress, setSelectedAddress] = useState<string>('');
   const [selectedPayment, setSelectedPayment] = useState('cod');
   const [couponCode, setCouponCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [addresses, setAddresses] = useState<UserAddress[]>([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(true);
 
   const grandTotal = totalPrice + deliveryFee - discount;
+
+  // Load user addresses from Firestore
+  useEffect(() => {
+    const loadAddresses = async () => {
+      if (user) {
+        setLoadingAddresses(true);
+        const userAddresses = await getUserAddresses(user.uid);
+        setAddresses(userAddresses);
+        // Select default address or first address
+        const defaultAddr = userAddresses.find(a => a.isDefault);
+        if (defaultAddr) {
+          setSelectedAddress(defaultAddr.id);
+        } else if (userAddresses.length > 0) {
+          setSelectedAddress(userAddresses[0].id);
+        }
+        setLoadingAddresses(false);
+      }
+    };
+    loadAddresses();
+  }, [user]);
 
   const applyCoupon = () => {
     if (couponCode.toUpperCase() === 'FIRST50') {
@@ -73,16 +95,74 @@ const Checkout = () => {
     }
   };
 
-  const placeOrder = () => {
-    setIsPlacingOrder(true);
-    setTimeout(() => {
-      clearCart();
+  const placeOrder = async () => {
+    if (!user) {
       toast({
-        title: '🎉 Order placed successfully!',
-        description: 'Your order will be delivered in 10-15 minutes',
+        title: 'Please login',
+        description: 'You need to be logged in to place an order',
+        variant: 'destructive',
       });
-      navigate('/orders');
-    }, 1500);
+      return;
+    }
+
+    const selectedAddr = addresses.find(a => a.id === selectedAddress);
+    if (!selectedAddr) {
+      toast({
+        title: 'Select address',
+        description: 'Please select a delivery address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsPlacingOrder(true);
+    
+    try {
+      // Create order in Firestore
+      const orderData = {
+        userId: user.uid,
+        date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+        status: 'confirmed' as const,
+        total: grandTotal,
+        items: items.map(item => ({
+          name: item.name,
+          qty: item.quantity,
+          price: item.price,
+          productId: item.id,
+        })),
+        deliveryAddress: selectedAddr.fullAddress,
+        timeline: [
+          { status: 'Order Placed', time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), completed: true },
+          { status: 'Order Confirmed', time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), completed: true },
+          { status: 'Preparing', time: '', completed: false },
+          { status: 'Out for Delivery', time: '', completed: false },
+          { status: 'Delivered', time: '', completed: false },
+        ],
+        eta: '10-15 mins',
+      };
+
+      const orderId = await createFirestoreOrder(orderData);
+      
+      if (orderId) {
+        await clearCart();
+        toast({
+          title: '🎉 Order placed successfully!',
+          description: 'Your order will be delivered in 10-15 minutes',
+        });
+        navigate('/orders');
+      } else {
+        throw new Error('Failed to create order');
+      }
+    } catch (error) {
+      console.error('Order placement error:', error);
+      toast({
+        title: 'Order failed',
+        description: 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   if (items.length === 0) {
@@ -124,31 +204,48 @@ const Checkout = () => {
             <MapPin className="w-5 h-5 text-primary" />
             <h2 className="font-semibold text-foreground">Delivery Address</h2>
           </div>
-          <RadioGroup value={selectedAddress} onValueChange={setSelectedAddress}>
-            {addresses.map((addr) => (
-              <div
-                key={addr.id}
-                className={cn(
-                  'flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
-                  selectedAddress === addr.id
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border'
-                )}
-                onClick={() => setSelectedAddress(addr.id)}
-              >
-                <RadioGroupItem value={addr.id} id={addr.id} className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor={addr.id} className="font-medium text-foreground cursor-pointer">
-                    {addr.label}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">{addr.address}</p>
+          
+          {loadingAddresses ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            </div>
+          ) : addresses.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground mb-2">No addresses saved</p>
+              <Link to="/profile/settings">
+                <Button variant="outline" size="sm">Add Address</Button>
+              </Link>
+            </div>
+          ) : (
+            <RadioGroup value={selectedAddress} onValueChange={setSelectedAddress}>
+              {addresses.map((addr) => (
+                <div
+                  key={addr.id}
+                  className={cn(
+                    'flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
+                    selectedAddress === addr.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border'
+                  )}
+                  onClick={() => setSelectedAddress(addr.id)}
+                >
+                  <RadioGroupItem value={addr.id} id={addr.id} className="mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor={addr.id} className="font-medium text-foreground cursor-pointer">
+                      {addr.label}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">{addr.fullAddress}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </RadioGroup>
-          <Button variant="outline" size="sm" className="mt-3 w-full">
-            + Add New Address
-          </Button>
+              ))}
+            </RadioGroup>
+          )}
+          
+          <Link to="/profile/settings">
+            <Button variant="outline" size="sm" className="mt-3 w-full">
+              + Add New Address
+            </Button>
+          </Link>
         </Card>
 
         {/* Delivery Time */}
@@ -277,9 +374,16 @@ const Checkout = () => {
         <Button
           className="w-full h-12 text-base font-semibold"
           onClick={placeOrder}
-          disabled={isPlacingOrder}
+          disabled={isPlacingOrder || addresses.length === 0}
         >
-          {isPlacingOrder ? 'Placing Order...' : `Pay ₹${grandTotal}`}
+          {isPlacingOrder ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Placing Order...
+            </>
+          ) : (
+            `Pay ₹${grandTotal}`
+          )}
         </Button>
       </div>
 

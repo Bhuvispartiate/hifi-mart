@@ -1,4 +1,4 @@
-import { Package, ChevronRight, RefreshCw, MapPin, Clock } from 'lucide-react';
+import { Package, ChevronRight, RefreshCw, MapPin, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,54 +6,36 @@ import { Separator } from '@/components/ui/separator';
 import { BottomNav } from '@/components/grocery/BottomNav';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
-import { products } from '@/data/products';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserOrders } from '@/hooks/useFirestoreData';
+import { useProducts } from '@/hooks/useFirestoreData';
 import { toast } from 'sonner';
 
-// Mock orders data
-const orders = [
-  {
-    id: 'ORD001',
-    date: '21 Dec 2024',
-    status: 'delivered',
-    total: 456,
-    items: [
-      { name: 'Fresh Bananas', qty: 2 },
-      { name: 'Amul Milk', qty: 1 },
-      { name: 'Red Apples', qty: 1 },
-    ],
-    deliveredAt: '10:32 AM',
-  },
-  {
-    id: 'ORD002',
-    date: '20 Dec 2024',
-    status: 'on_the_way',
-    total: 289,
-    items: [
-      { name: 'Tomatoes', qty: 1 },
-      { name: 'Onions', qty: 2 },
-    ],
-    eta: '12 mins',
-  },
-  {
-    id: 'ORD003',
-    date: '18 Dec 2024',
-    status: 'cancelled',
-    total: 199,
-    items: [{ name: 'Bread', qty: 1 }],
-    cancelledReason: 'Item out of stock',
-  },
-];
-
 const statusConfig = {
+  pending: {
+    label: 'Pending',
+    color: 'bg-muted text-muted-foreground',
+    icon: '⏳',
+  },
+  confirmed: {
+    label: 'Confirmed',
+    color: 'bg-accent text-accent-foreground',
+    icon: '✓',
+  },
+  preparing: {
+    label: 'Preparing',
+    color: 'bg-accent text-accent-foreground',
+    icon: '👨‍🍳',
+  },
+  out_for_delivery: {
+    label: 'On the way',
+    color: 'bg-accent text-accent-foreground',
+    icon: '🚀',
+  },
   delivered: {
     label: 'Delivered',
     color: 'bg-success text-success-foreground',
     icon: '✓',
-  },
-  on_the_way: {
-    label: 'On the way',
-    color: 'bg-accent text-accent-foreground',
-    icon: '🚀',
   },
   cancelled: {
     label: 'Cancelled',
@@ -63,7 +45,9 @@ const statusConfig = {
 };
 
 const Orders = () => {
-  const hasOrders = orders.length > 0;
+  const { user } = useAuth();
+  const { orders, loading } = useUserOrders(user?.uid);
+  const { products } = useProducts();
   const { addItem, clearCart } = useCart();
   const navigate = useNavigate();
 
@@ -74,7 +58,7 @@ const Orders = () => {
     // Add each item from the order to cart
     order.items.forEach(item => {
       // Find the product in our products list
-      const product = products.find(p => p.name === item.name);
+      const product = products.find(p => p.name === item.name || p.id === item.productId);
       if (product) {
         for (let i = 0; i < item.qty; i++) {
           addItem(product);
@@ -83,12 +67,22 @@ const Orders = () => {
     });
     
     toast.success('Items added to cart', {
-      description: `${order.items.length} items from order #${order.id}`,
+      description: `${order.items.length} items from order #${order.id.slice(0, 8)}`,
     });
     
     // Navigate to checkout
     navigate('/checkout');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const hasOrders = orders.length > 0;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -115,7 +109,13 @@ const Orders = () => {
         ) : (
           <div className="space-y-4">
             {orders.map((order) => {
-              const status = statusConfig[order.status as keyof typeof statusConfig];
+              const status = statusConfig[order.status as keyof typeof statusConfig] || statusConfig.pending;
+              const displayDate = order.date || new Date(order.createdAt).toLocaleDateString('en-IN', { 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric' 
+              });
+              
               return (
                 <Card key={order.id} className="p-4 border border-border rounded-xl">
                   {/* Order Header */}
@@ -123,13 +123,13 @@ const Orders = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold text-foreground">
-                          #{order.id}
+                          #{order.id.slice(0, 8).toUpperCase()}
                         </span>
                         <Badge className={status.color + ' text-[10px] px-1.5'}>
                           {status.icon} {status.label}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">{order.date}</p>
+                      <p className="text-xs text-muted-foreground">{displayDate}</p>
                     </div>
                     <span className="font-semibold text-foreground">₹{order.total}</span>
                   </div>
@@ -145,7 +145,7 @@ const Orders = () => {
                   </div>
 
                   {/* Status Info */}
-                  {order.status === 'on_the_way' && (
+                  {order.status === 'out_for_delivery' && order.eta && (
                     <div className="flex items-center gap-2 mb-3 text-sm">
                       <Clock className="w-4 h-4 text-accent" />
                       <span className="text-foreground">
@@ -154,7 +154,7 @@ const Orders = () => {
                     </div>
                   )}
 
-                  {order.status === 'delivered' && (
+                  {order.status === 'delivered' && order.deliveredAt && (
                     <div className="flex items-center gap-2 mb-3 text-sm">
                       <MapPin className="w-4 h-4 text-success" />
                       <span className="text-muted-foreground">
@@ -163,7 +163,7 @@ const Orders = () => {
                     </div>
                   )}
 
-                  {order.status === 'cancelled' && (
+                  {order.status === 'cancelled' && order.cancelledReason && (
                     <p className="text-xs text-destructive mb-3">
                       Reason: {order.cancelledReason}
                     </p>
@@ -183,7 +183,7 @@ const Orders = () => {
                     </Button>
                     <Link to={`/order/${order.id}`}>
                       <Button variant="ghost" size="sm" className="text-primary">
-                        {order.status === 'on_the_way' ? 'Track Order' : 'View Details'}
+                        {order.status === 'out_for_delivery' ? 'Track Order' : 'View Details'}
                         <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     </Link>

@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Tag, Clock, Copy, Check } from 'lucide-react';
+import { Tag, Clock, Copy, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/grocery/BottomNav';
 import { DeliveryActionBar } from '@/components/grocery/DeliveryActionBar';
-import { offers } from '@/data/products';
+import { useOffers } from '@/hooks/useFirestoreData';
 import { useToast } from '@/hooks/use-toast';
 
 const Offers = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { offers, loading } = useOffers();
 
   const handleCopyCode = (code: string, id: string) => {
     navigator.clipboard.writeText(code);
@@ -40,6 +41,14 @@ const Offers = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-36">
