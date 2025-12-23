@@ -207,13 +207,13 @@ export const getBanners = async (): Promise<Banner[]> => {
 
 export const getUserOrders = async (userId: string): Promise<Order[]> => {
   try {
-    // Simple query without orderBy to avoid requiring composite index
     const q = query(
       collection(db, 'orders'), 
-      where('userId', '==', userId)
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
-    const orders = querySnapshot.docs.map(doc => {
+    return querySnapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -221,8 +221,6 @@ export const getUserOrders = async (userId: string): Promise<Order[]> => {
         createdAt: data.createdAt?.toDate() || new Date(),
       } as Order;
     });
-    // Sort client-side by createdAt descending
-    return orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   } catch (error) {
     console.error('Error fetching orders:', error);
     return [];
