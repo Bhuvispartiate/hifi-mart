@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/lib/supabase';
-import { User, Session } from '@supabase/supabase-js';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '@/lib/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import type { ConfirmationResult, User as FirebaseUser } from 'firebase/auth';
 
 interface AuthUser {
   uid: string;
@@ -30,84 +31,129 @@ const DEMO_USER: AuthUser = {
 // Demo OTP for testing
 const DEMO_OTP = '123456';
 
+// Store confirmation result globally for verification step
+let confirmationResult: ConfirmationResult | null = null;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        if (session?.user) {
-          const authUser: AuthUser = {
-            uid: session.user.id,
-            phoneNumber: session.user.phone || '',
-            displayName: session.user.user_metadata?.display_name || undefined,
-          };
-          setUser(authUser);
-          localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
-        } else {
-          // Check for demo user
-          const storedUser = localStorage.getItem('grocery_auth_user');
-          if (storedUser) {
-            const parsed = JSON.parse(storedUser);
-            if (parsed.uid.startsWith('demo')) {
-              setUser(parsed);
-            } else {
-              setUser(null);
-              localStorage.removeItem('grocery_auth_user');
-            }
-          } else {
-            setUser(null);
-          }
-        }
+    // Check for stored demo user first
+    const storedUser = localStorage.getItem('grocery_auth_user');
+    if (storedUser) {
+      const parsed = JSON.parse(storedUser);
+      if (parsed.uid.startsWith('demo')) {
+        setUser(parsed);
+        setIsDemoMode(true);
         setLoading(false);
+        return;
       }
-    );
+    }
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
+    // Listen for Firebase auth state changes
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+      if (firebaseUser) {
         const authUser: AuthUser = {
-          uid: session.user.id,
-          phoneNumber: session.user.phone || '',
-          displayName: session.user.user_metadata?.display_name || undefined,
+          uid: firebaseUser.uid,
+          phoneNumber: firebaseUser.phoneNumber || '',
+          displayName: firebaseUser.displayName || undefined,
         };
         setUser(authUser);
+        setIsDemoMode(false);
+        localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+      } else {
+        // Check if demo user
+        const storedUser = localStorage.getItem('grocery_auth_user');
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.uid.startsWith('demo')) {
+            setUser(parsed);
+            setIsDemoMode(true);
+          } else {
+            setUser(null);
+            localStorage.removeItem('grocery_auth_user');
+          }
+        } else {
+          setUser(null);
+        }
       }
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
+  }, []);
+
+  const setupRecaptcha = useCallback(() => {
+    // Clear any existing recaptcha
+    if ((window as any).recaptchaVerifier) {
+      try {
+        (window as any).recaptchaVerifier.clear();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+
+    // Create invisible recaptcha container if it doesn't exist
+    let recaptchaContainer = document.getElementById('recaptcha-container');
+    if (!recaptchaContainer) {
+      recaptchaContainer = document.createElement('div');
+      recaptchaContainer.id = 'recaptcha-container';
+      document.body.appendChild(recaptchaContainer);
+    }
+
+    (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+      callback: () => {
+        // reCAPTCHA solved
+      },
+      'expired-callback': () => {
+        // Reset reCAPTCHA
+      },
+    });
+
+    return (window as any).recaptchaVerifier;
   }, []);
 
   const sendOTP = async (phoneNumber: string): Promise<{ success: boolean; error?: string }> => {
+    // Check for demo phone number
+    if (phoneNumber === '+910000000000' || phoneNumber === '+911234567890') {
+      setIsDemoMode(true);
+      return { success: true };
+    }
+
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: phoneNumber,
-      });
-      
-      if (error) {
-        return { success: false, error: error.message };
-      }
-      
+      const appVerifier = setupRecaptcha();
+      const result = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+      confirmationResult = result;
+      setIsDemoMode(false);
       return { success: true };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send OTP';
       console.error('OTP send error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send OTP';
+      
+      // Provide more user-friendly error messages
+      if (errorMessage.includes('auth/invalid-phone-number')) {
+        return { success: false, error: 'Invalid phone number format' };
+      }
+      if (errorMessage.includes('auth/too-many-requests')) {
+        return { success: false, error: 'Too many attempts. Please try again later.' };
+      }
+      if (errorMessage.includes('auth/quota-exceeded')) {
+        return { success: false, error: 'SMS quota exceeded. Try demo login instead.' };
+      }
+      
       return { success: false, error: errorMessage };
     }
   };
 
   const verifyOTP = async (phoneNumber: string, otp: string): Promise<{ success: boolean; error?: string }> => {
-    // Check for demo OTP first
-    if (otp === DEMO_OTP && phoneNumber === '+910000000000') {
+    // Check for demo OTP
+    if (isDemoMode && otp === DEMO_OTP) {
       const demoUser: AuthUser = {
         uid: 'demo-user-' + Date.now(),
-        phoneNumber: '+91 00000 00000',
+        phoneNumber: phoneNumber,
         displayName: 'Demo User',
       };
       setUser(demoUser);
@@ -115,53 +161,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: true };
     }
 
-    // Real Supabase OTP verification
+    // Real Firebase OTP verification
+    if (!confirmationResult) {
+      return { success: false, error: 'Please request OTP first' };
+    }
+
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: phoneNumber,
-        token: otp,
-        type: 'sms',
-      });
-      
-      if (error) {
-        return { success: false, error: error.message };
-      }
-      
-      if (data.user) {
+      const result = await confirmationResult.confirm(otp);
+      if (result.user) {
         const authUser: AuthUser = {
-          uid: data.user.id,
-          phoneNumber: data.user.phone || '',
-          displayName: data.user.user_metadata?.display_name || undefined,
+          uid: result.user.uid,
+          phoneNumber: result.user.phoneNumber || '',
+          displayName: result.user.displayName || undefined,
         };
         setUser(authUser);
         localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+        confirmationResult = null;
       }
-      
       return { success: true };
     } catch (error: unknown) {
+      console.error('OTP verify error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Invalid OTP';
+      
+      if (errorMessage.includes('auth/invalid-verification-code')) {
+        return { success: false, error: 'Invalid OTP. Please try again.' };
+      }
+      if (errorMessage.includes('auth/code-expired')) {
+        return { success: false, error: 'OTP expired. Please request a new one.' };
+      }
+      
       return { success: false, error: errorMessage };
     }
   };
 
   const demoLogin = () => {
     setUser(DEMO_USER);
+    setIsDemoMode(true);
     localStorage.setItem('grocery_auth_user', JSON.stringify(DEMO_USER));
   };
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut(auth);
     } catch (error) {
       console.error('Logout error:', error);
     }
     setUser(null);
-    setSession(null);
+    setIsDemoMode(false);
     localStorage.removeItem('grocery_auth_user');
+    confirmationResult = null;
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isDemoMode: false, sendOTP, verifyOTP, demoLogin, logout }}>
+    <AuthContext.Provider value={{ user, loading, isDemoMode, sendOTP, verifyOTP, demoLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );
