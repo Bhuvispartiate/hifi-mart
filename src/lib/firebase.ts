@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 import type { ConfirmationResult } from "firebase/auth";
 
 const firebaseConfig = {
@@ -15,6 +16,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 
-export { app, auth, RecaptchaVerifier, signInWithPhoneNumber };
+export { app, auth, db, RecaptchaVerifier, signInWithPhoneNumber };
 export type { ConfirmationResult };

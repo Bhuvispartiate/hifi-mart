@@ -14,6 +14,7 @@ import Account from "./pages/Account";
 import Checkout from "./pages/Checkout";
 import ProductDetail from "./pages/ProductDetail";
 import OrderStatus from "./pages/OrderStatus";
+import ProfileSettings from "./pages/ProfileSettings";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/order/:orderId" element={<ProtectedRoute><OrderStatus /></ProtectedRoute>} />
+              <Route path="/profile/settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

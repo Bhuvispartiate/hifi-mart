@@ -22,11 +22,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 const menuItems = [
-  { icon: MapPin, label: 'Saved Addresses', description: '2 addresses saved', link: '#' },
+  { icon: MapPin, label: 'Saved Addresses', description: 'Manage addresses', link: '/profile/settings' },
   { icon: CreditCard, label: 'Payment Methods', description: 'UPI, Cards', link: '#' },
   { icon: Package, label: 'My Orders', description: 'Track & reorder', link: '/orders' },
   { icon: Bell, label: 'Notifications', description: 'Manage alerts', link: '#' },
-  { icon: Settings, label: 'Settings', description: 'App preferences', link: '#' },
+  { icon: Settings, label: 'Settings', description: 'App preferences', link: '/profile/settings' },
   { icon: HelpCircle, label: 'Help & Support', description: 'FAQs, Contact us', link: '#' },
 ];
 
@@ -96,7 +96,7 @@ const Account = () => {
               </div>
               <p className="text-sm text-muted-foreground">{user.phoneNumber}</p>
             </div>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/profile/settings')}>
               <Edit2 className="w-4 h-4 text-muted-foreground" />
             </Button>
           </div>
