@@ -260,16 +260,26 @@ export default function DeliveryHome() {
         zoom: 13,
       });
 
-      // Create custom delivery bike marker element using the uploaded image
+      // Create clean scooter/delivery marker
       const bikeEl = document.createElement('div');
-      bikeEl.style.width = '48px';
-      bikeEl.style.height = '48px';
-      bikeEl.style.backgroundImage = 'url(/images/delivery-bike.png)';
-      bikeEl.style.backgroundSize = 'contain';
-      bikeEl.style.backgroundRepeat = 'no-repeat';
-      bikeEl.style.backgroundPosition = 'center';
-      bikeEl.style.cursor = 'pointer';
-      bikeEl.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
+      bikeEl.style.width = '40px';
+      bikeEl.style.height = '40px';
+      bikeEl.style.borderRadius = '50%';
+      bikeEl.style.backgroundColor = '#3B82F6';
+      bikeEl.style.display = 'flex';
+      bikeEl.style.alignItems = 'center';
+      bikeEl.style.justifyContent = 'center';
+      bikeEl.style.boxShadow = '0 2px 8px rgba(59,130,246,0.5)';
+      bikeEl.style.border = '3px solid white';
+      bikeEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="5" cy="17" r="3"/>
+        <circle cx="19" cy="17" r="3"/>
+        <path d="M8.5 17h7"/>
+        <path d="M5.5 14L7 7h4l3 7"/>
+        <path d="M16 14l-1-5h-4"/>
+        <path d="M12 6V4"/>
+        <circle cx="12" cy="3" r="1"/>
+      </svg>`;
 
       deliveryMarkerRef.current = new mapboxgl.Marker({ element: bikeEl, anchor: 'center' })
         .setLngLat([start.lng, start.lat])
