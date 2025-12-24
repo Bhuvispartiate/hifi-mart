@@ -88,27 +88,22 @@ export default function DeliveryHome() {
     const unsubscribe = subscribeToAllOrders((allOrders) => {
       setOrders(allOrders);
       
-      // Find order assigned to this specific delivery partner that is "confirmed" (awaiting acceptance)
-      const assignedOrder = allOrders.find(o => 
-        o.status === 'confirmed' && 
-        o.deliveryPartner?.id === deliveryPartner?.id
-      );
+      // Find order assigned to this delivery partner based on status
+      const myOrder = allOrders.find(o => o.deliveryPartner?.id === deliveryPartner?.id);
       
-      // If there's a confirmed order assigned to this partner, show it for acceptance
-      if (assignedOrder && !currentOrder) {
-        setCurrentOrder(assignedOrder);
-        setStatus('assigned');
-      }
-      
-      // Find order that is "out_for_delivery" and assigned to this partner - go to navigating
-      const activeOrder = allOrders.find(o => 
-        o.status === 'out_for_delivery' && 
-        o.deliveryPartner?.id === deliveryPartner?.id
-      );
-      
-      if (activeOrder && !currentOrder) {
-        setCurrentOrder(activeOrder);
-        setStatus('navigating');
+      if (myOrder && !currentOrder) {
+        setCurrentOrder(myOrder);
+        
+        // Set UI status based on order status
+        if (myOrder.status === 'confirmed') {
+          setStatus('assigned'); // Waiting for acceptance
+        } else if (myOrder.status === 'preparing') {
+          setStatus('pickup'); // Accepted, waiting for pickup
+        } else if (myOrder.status === 'out_for_delivery') {
+          setStatus('navigating'); // Picked up, navigating
+        } else if (myOrder.status === 'reached_destination') {
+          setStatus('reached'); // Reached, waiting for OTP
+        }
       }
       
       // Update current order if it exists
@@ -116,11 +111,20 @@ export default function DeliveryHome() {
         const updatedOrder = allOrders.find(o => o.id === currentOrder.id);
         if (updatedOrder) {
           setCurrentOrder(updatedOrder);
-          if (updatedOrder.status === 'out_for_delivery' && status === 'pickup') {
+          
+          // Sync UI status with order status
+          if (updatedOrder.status === 'preparing' && status !== 'pickup') {
+            setStatus('pickup');
+          }
+          if (updatedOrder.status === 'out_for_delivery' && status !== 'navigating') {
             setStatus('navigating');
           }
-          if (updatedOrder.status === 'reached_destination') {
+          if (updatedOrder.status === 'reached_destination' && status !== 'reached') {
             setStatus('reached');
+          }
+          if (updatedOrder.status === 'delivered') {
+            setStatus('waiting');
+            setCurrentOrder(null);
           }
         }
       }
