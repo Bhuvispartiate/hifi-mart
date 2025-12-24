@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 // VAPID key from Firebase Console -> Project Settings -> Cloud Messaging -> Web Push certificates
 // This is a public key and safe to include in client code
-const VAPID_KEY = 'BKxJyQVwReCTDJ8vKfC5H6h0zB3VQ7vA8_T1Y2L5nK4mM9dX6pW3rS8uQ1iO0jF2cH5gN7bE4aZ3xD9wY6kV2tI';
+const VAPID_KEY = 'BDEhiNeQzLlCja0yS27OYaMceF0I2AV0dV7FC1AjdxCe-aZ1_5p7iU6CveZ5lxAEk6JQklx33-k5toyiqslBRZo';
 
 export const useFCM = () => {
   const [fcmToken, setFcmToken] = useState<string | null>(null);
