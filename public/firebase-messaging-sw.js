@@ -16,46 +16,6 @@ firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
-// Custom notification sound (two-tone ringtone)
-const audioContext = new (self.AudioContext || self.webkitAudioContext)();
-
-function playCustomRingtone() {
-  const oscillator1 = audioContext.createOscillator();
-  const oscillator2 = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-
-  oscillator1.connect(gainNode);
-  oscillator2.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-
-  oscillator1.frequency.value = 880;
-  oscillator2.frequency.value = 1320;
-  oscillator1.type = 'sine';
-  oscillator2.type = 'sine';
-  gainNode.gain.value = 0.3;
-
-  const now = audioContext.currentTime;
-  
-  // Play repeating two-tone pattern
-  for (let i = 0; i < 4; i++) {
-    const startTime = now + (i * 0.6);
-    oscillator1.frequency.setValueAtTime(880, startTime);
-    oscillator1.frequency.setValueAtTime(0, startTime + 0.15);
-    oscillator2.frequency.setValueAtTime(0, startTime);
-    oscillator2.frequency.setValueAtTime(1320, startTime + 0.15);
-    oscillator2.frequency.setValueAtTime(0, startTime + 0.3);
-  }
-
-  oscillator1.start(now);
-  oscillator2.start(now);
-  oscillator1.stop(now + 2.5);
-  oscillator2.stop(now + 2.5);
-
-  // Fade out
-  gainNode.gain.setValueAtTime(0.3, now + 2);
-  gainNode.gain.linearRampToValueAtTime(0, now + 2.5);
-}
-
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
@@ -70,13 +30,6 @@ messaging.onBackgroundMessage((payload) => {
     vibrate: [200, 100, 200, 100, 200, 100, 200],
     data: payload.data,
   };
-
-  // Try to play custom sound
-  try {
-    playCustomRingtone();
-  } catch (e) {
-    console.log('Could not play custom sound in SW:', e);
-  }
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
