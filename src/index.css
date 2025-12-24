@@ -122,3 +122,9 @@
     display: none;
   }
 }
+
+/* Hide Mapbox watermark/logo for testing */
+.mapboxgl-ctrl-logo,
+.mapboxgl-ctrl-attrib {
+  display: none !important;
+}
