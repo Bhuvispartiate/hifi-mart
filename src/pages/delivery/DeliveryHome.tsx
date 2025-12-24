@@ -88,16 +88,27 @@ export default function DeliveryHome() {
     const unsubscribe = subscribeToAllOrders((allOrders) => {
       setOrders(allOrders);
       
-      // Find order assigned to this specific delivery partner that is "Out For Delivery"
+      // Find order assigned to this specific delivery partner that is "confirmed" (awaiting acceptance)
+      const assignedOrder = allOrders.find(o => 
+        o.status === 'confirmed' && 
+        o.deliveryPartner?.id === deliveryPartner?.id
+      );
+      
+      // If there's a confirmed order assigned to this partner, show it for acceptance
+      if (assignedOrder && !currentOrder) {
+        setCurrentOrder(assignedOrder);
+        setStatus('assigned');
+      }
+      
+      // Find order that is "out_for_delivery" and assigned to this partner - go to navigating
       const activeOrder = allOrders.find(o => 
         o.status === 'out_for_delivery' && 
         o.deliveryPartner?.id === deliveryPartner?.id
       );
       
-      // If there's an active order with "out_for_delivery" status, go directly to navigating
       if (activeOrder && !currentOrder) {
         setCurrentOrder(activeOrder);
-        setStatus('navigating'); // Directly show "Navigating to Customer"
+        setStatus('navigating');
       }
       
       // Update current order if it exists
@@ -105,6 +116,9 @@ export default function DeliveryHome() {
         const updatedOrder = allOrders.find(o => o.id === currentOrder.id);
         if (updatedOrder) {
           setCurrentOrder(updatedOrder);
+          if (updatedOrder.status === 'out_for_delivery' && status === 'pickup') {
+            setStatus('navigating');
+          }
           if (updatedOrder.status === 'reached_destination') {
             setStatus('reached');
           }
@@ -113,7 +127,7 @@ export default function DeliveryHome() {
     });
 
     return () => unsubscribe();
-  }, [currentOrder?.id, deliveryPartner?.id]);
+  }, [currentOrder?.id, deliveryPartner?.id, status]);
 
   // Initialize map when navigating
   useEffect(() => {
@@ -388,11 +402,29 @@ export default function DeliveryHome() {
   }, [applyRoutesToMap, routeOptions, selectedRouteIndex, status]);
 
   const handleAcceptOrder = async () => {
-    setStatus('pickup');
+    if (!currentOrder) return;
+    
+    try {
+      // Update status to "preparing" when delivery partner accepts
+      await updateOrderStatus(currentOrder.id, 'preparing');
+      setStatus('pickup');
+      toast({ title: 'Order accepted', description: 'Proceed to pickup the order' });
+    } catch (error) {
+      toast({ title: 'Error accepting order', variant: 'destructive' });
+    }
   };
 
-  const handlePickupComplete = () => {
-    setStatus('navigating');
+  const handlePickupComplete = async () => {
+    if (!currentOrder) return;
+    
+    try {
+      // Update status to "out_for_delivery" when pickup is complete
+      await updateOrderStatus(currentOrder.id, 'out_for_delivery');
+      setStatus('navigating');
+      toast({ title: 'Pickup complete', description: 'Navigate to customer location' });
+    } catch (error) {
+      toast({ title: 'Error updating status', variant: 'destructive' });
+    }
   };
 
   const handleReachedDestination = async () => {
