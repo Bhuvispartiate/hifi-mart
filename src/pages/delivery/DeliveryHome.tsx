@@ -63,9 +63,18 @@ export default function DeliveryHome() {
 
   // Initialize map when navigating
   useEffect(() => {
-    if (status !== 'navigating' || !mapContainer.current || !currentOrder?.deliveryCoordinates) return;
+    if (status !== 'navigating' || !mapContainer.current) return;
+
+    // Clean up existing map
+    if (map.current) {
+      map.current.remove();
+      map.current = null;
+    }
 
     mapboxgl.accessToken = 'pk.eyJ1IjoibG92YWJsZSIsImEiOiJjbHNxcXBiNGkwMmt4MmtvOXRtY3d4M2RlIn0.v1fT8IOkVRnKPzKlQUL_Eg';
+
+    // Use delivery coordinates if available, otherwise use default destination
+    const destinationCoords = currentOrder?.deliveryCoordinates || { lat: 13.1067, lng: 80.0923 }; // Default to Ponneri area
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -73,32 +82,36 @@ export default function DeliveryHome() {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
-        initializeMap(currentPos, currentOrder.deliveryCoordinates!);
+        initializeMap(currentPos, destinationCoords);
       },
       () => {
-        // Fallback if geolocation fails
+        // Fallback if geolocation fails - use Chennai area coordinates
         initializeMap(
-          { lat: 12.9716, lng: 77.5946 }, 
-          currentOrder.deliveryCoordinates!
+          { lat: 13.0827, lng: 80.2707 }, 
+          destinationCoords
         );
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
 
     return () => {
-      map.current?.remove();
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
     };
-  }, [status, currentOrder]);
+  }, [status, currentOrder?.id]);
 
   const initializeMap = (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
     if (!mapContainer.current) return;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/navigation-night-v1',
-      center: [start.lng, start.lat],
-      zoom: 14,
-      pitch: 45,
-    });
+    try {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [(start.lng + end.lng) / 2, (start.lat + end.lat) / 2],
+        zoom: 13,
+      });
 
     new mapboxgl.Marker({ color: '#3B82F6' })
       .setLngLat([start.lng, start.lat])
@@ -116,9 +129,12 @@ export default function DeliveryHome() {
         showUserHeading: true,
       }),
       'top-right'
-    );
+      );
 
-    fetchRoute(start, end);
+      fetchRoute(start, end);
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
   };
 
   const fetchRoute = async (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
@@ -229,8 +245,8 @@ export default function DeliveryHome() {
     <div className="min-h-screen bg-background pb-20">
       {status === 'navigating' && currentOrder ? (
         // Full screen navigation mode
-        <div className="fixed inset-0 z-50 bg-background">
-          <div ref={mapContainer} className="w-full h-full" />
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+          <div ref={mapContainer} className="w-full flex-1 min-h-0" style={{ height: 'calc(100vh - 200px)' }} />
           
           <div className="absolute top-4 left-4 right-4 z-10">
             <Card className="bg-background/95 backdrop-blur-sm">
