@@ -13,34 +13,40 @@ import { toast } from 'sonner';
 
 const statusConfig = {
   pending: {
-    label: 'Pending',
+    label: 'Order Placed',
     color: 'bg-muted text-muted-foreground',
-    icon: '⏳',
+    icon: '📦',
+    description: 'Checking stock availability',
   },
   confirmed: {
-    label: 'Confirmed',
+    label: 'Order Confirmed',
     color: 'bg-accent text-accent-foreground',
     icon: '✓',
-  },
-  preparing: {
-    label: 'Preparing',
-    color: 'bg-accent text-accent-foreground',
-    icon: '👨‍🍳',
+    description: 'Awaiting delivery partner',
   },
   out_for_delivery: {
-    label: 'On the way',
-    color: 'bg-accent text-accent-foreground',
+    label: 'Out For Delivery',
+    color: 'bg-primary text-primary-foreground',
     icon: '🚀',
+    description: 'Order picked by delivery partner',
+  },
+  reached_destination: {
+    label: 'Reached Destination',
+    color: 'bg-accent text-accent-foreground',
+    icon: '📍',
+    description: 'Delivery partner has arrived',
   },
   delivered: {
     label: 'Delivered',
     color: 'bg-success text-success-foreground',
     icon: '✓',
+    description: 'Order completed',
   },
   cancelled: {
     label: 'Cancelled',
     color: 'bg-destructive text-destructive-foreground',
     icon: '✗',
+    description: 'Order was cancelled',
   },
 };
 
@@ -147,9 +153,17 @@ const Orders = () => {
                   {/* Status Info */}
                   {order.status === 'out_for_delivery' && order.eta && (
                     <div className="flex items-center gap-2 mb-3 text-sm">
-                      <Clock className="w-4 h-4 text-accent" />
+                      <Clock className="w-4 h-4 text-primary" />
                       <span className="text-foreground">
                         Arriving in <strong>{order.eta}</strong>
+                      </span>
+                    </div>
+                  )}
+
+                  {order.status === 'reached_destination' && order.deliveryOtp && (
+                    <div className="flex items-center gap-2 mb-3 text-sm bg-primary/10 p-2 rounded-lg">
+                      <span className="text-foreground">
+                        OTP: <strong className="text-primary text-lg">{order.deliveryOtp}</strong>
                       </span>
                     </div>
                   )}
@@ -183,7 +197,7 @@ const Orders = () => {
                     </Button>
                     <Link to={`/order/${order.id}`}>
                       <Button variant="ghost" size="sm" className="text-primary">
-                        {order.status === 'out_for_delivery' ? 'Track Order' : 'View Details'}
+                        {(order.status === 'out_for_delivery' || order.status === 'reached_destination') ? 'Track Order' : 'View Details'}
                         <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     </Link>
