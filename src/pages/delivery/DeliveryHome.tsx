@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { DeliveryBottomNav } from '@/components/delivery/DeliveryBottomNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
 import { 
   Order, 
   subscribeToAllOrders, 
@@ -20,6 +21,7 @@ type DeliveryStatus = 'waiting' | 'assigned' | 'pickup' | 'navigating' | 'reache
 
 export default function DeliveryHome() {
   const navigate = useNavigate();
+  const { deliveryPartner } = useDeliveryAuth();
   const [status, setStatus] = useState<DeliveryStatus>('waiting');
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -28,14 +30,15 @@ export default function DeliveryHome() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
 
-  // Subscribe to real-time orders
+  // Subscribe to real-time orders assigned to this delivery partner
   useEffect(() => {
     const unsubscribe = subscribeToAllOrders((allOrders) => {
       setOrders(allOrders);
       
-      // Find order assigned to this delivery partner (for demo, we'll pick confirmed/preparing orders)
+      // Find order assigned to this specific delivery partner
       const assignedOrder = allOrders.find(o => 
-        o.status === 'out_for_delivery' && o.deliveryPartner
+        o.status === 'out_for_delivery' && 
+        o.deliveryPartner?.id === deliveryPartner?.id
       );
       
       if (assignedOrder && !currentOrder) {
@@ -56,7 +59,7 @@ export default function DeliveryHome() {
     });
 
     return () => unsubscribe();
-  }, [currentOrder?.id]);
+  }, [currentOrder?.id, deliveryPartner?.id]);
 
   // Initialize map when navigating
   useEffect(() => {
@@ -335,8 +338,8 @@ export default function DeliveryHome() {
           <div className="bg-primary text-primary-foreground p-4 pt-12">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">Good Morning</p>
-                <h1 className="text-xl font-bold">Delivery Partner</h1>
+                <p className="text-sm opacity-90">Welcome back</p>
+                <h1 className="text-xl font-bold">{deliveryPartner?.name || 'Delivery Partner'}</h1>
               </div>
               <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground">
                 Online

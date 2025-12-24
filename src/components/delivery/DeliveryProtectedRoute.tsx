@@ -1,13 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAdminAuth } from '@/contexts/AdminAuthContext';
+import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
 import { Loader2 } from 'lucide-react';
 
-interface AdminProtectedRouteProps {
+interface DeliveryProtectedRouteProps {
   children: React.ReactNode;
 }
 
-const AdminProtectedRoute = ({ children }: AdminProtectedRouteProps) => {
-  const { adminUser, isAdmin, loading } = useAdminAuth();
+const DeliveryProtectedRoute = ({ children }: DeliveryProtectedRouteProps) => {
+  const { isAuthenticated, loading } = useDeliveryAuth();
   const location = useLocation();
 
   if (loading) {
@@ -18,11 +18,11 @@ const AdminProtectedRoute = ({ children }: AdminProtectedRouteProps) => {
     );
   }
 
-  if (!adminUser || !isAdmin) {
-    return <Navigate to="/admin/login" state={{ from: location }} replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/delivery/login" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
 };
 
-export default AdminProtectedRoute;
+export default DeliveryProtectedRoute;
