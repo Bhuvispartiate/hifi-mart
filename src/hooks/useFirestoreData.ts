@@ -9,6 +9,7 @@ import {
   getProductReviews,
   getUserOrders,
   getOrderById,
+  subscribeToUserOrders,
   Product,
   Category,
   Offer,
@@ -226,35 +227,33 @@ export const useUserOrders = (userId: string | undefined) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      if (!userId) {
-        setOrders([]);
-        setLoading(false);
-        return;
-      }
+    if (!userId) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
 
-      try {
-        setLoading(true);
-        const data = await getUserOrders(userId);
+    setLoading(true);
+    
+    // Use real-time subscription for auto-refresh
+    const unsubscribe = subscribeToUserOrders(
+      userId,
+      (data) => {
         setOrders(data);
+        setLoading(false);
         setError(null);
-      } catch (err) {
+      },
+      (err) => {
         setError('Failed to load orders');
         console.error(err);
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    fetchOrders();
+    return () => unsubscribe();
   }, [userId]);
 
-  return { orders, loading, error, refetch: async () => {
-    if (userId) {
-      const data = await getUserOrders(userId);
-      setOrders(data);
-    }
-  }};
+  return { orders, loading, error };
 };
 
 export const useOrder = (orderId: string | undefined) => {
