@@ -237,9 +237,11 @@ export default function DeliveryHome() {
         zoom: 13,
       });
 
-      // Create custom bike marker element
+      // Create custom motorbike marker element
       const bikeEl = document.createElement('div');
-      bikeEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`;
+      bikeEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="#3B82F6">
+        <path d="M19.5 15.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm-15 0a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm15-1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-15 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm13.25-4l1.5 3h1.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1-.67-.42L15.5 11h-3l-1.75 3.5a.75.75 0 0 1-.67.42H8.5v-1.5h1.08l1.5-3H8.75a.75.75 0 0 1-.53-.22l-2-2a.75.75 0 0 1 1.06-1.06L9.06 9h3.69a.75.75 0 0 1 .67.42l.83 1.58h3.5zm-5.25-5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/>
+      </svg>`;
       bikeEl.style.cursor = 'pointer';
 
       deliveryMarkerRef.current = new mapboxgl.Marker({ element: bikeEl })
