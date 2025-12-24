@@ -55,6 +55,7 @@ const AdminHomeDelivery = () => {
   const [selectedAddress, setSelectedAddress] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   
   // Product search & cart
   const [productSearch, setProductSearch] = useState('');
@@ -313,7 +314,19 @@ const AdminHomeDelivery = () => {
                       <MapPin className="h-4 w-4" />
                       Delivery Address *
                     </Label>
-                    <LocationPicker onLocationSelect={handleLocationSelect} />
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setLocationPickerOpen(true)}
+                    >
+                      <MapPin className="h-4 w-4 mr-2" />
+                      {newAddress || 'Select Address on Map'}
+                    </Button>
+                    <LocationPicker 
+                      open={locationPickerOpen}
+                      onClose={() => setLocationPickerOpen(false)}
+                      onLocationSelect={handleLocationSelect} 
+                    />
                     {newAddress && (
                       <p className="text-sm text-muted-foreground mt-2">{newAddress}</p>
                     )}

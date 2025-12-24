@@ -557,3 +557,296 @@ export const seedOrders = async (orders: Array<Omit<Order, 'createdAt'> & { id: 
     return false;
   }
 };
+
+// ============= DELIVERY PARTNERS =============
+
+export interface DeliveryPartner {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  isActive: boolean;
+  vehicleType: 'bike' | 'scooter' | 'bicycle';
+  rating: number;
+  totalDeliveries: number;
+  joinedAt: Date;
+}
+
+export const getDeliveryPartners = async (): Promise<DeliveryPartner[]> => {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'deliveryPartners'));
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        joinedAt: data.joinedAt?.toDate() || new Date(),
+      } as DeliveryPartner;
+    });
+  } catch (error) {
+    console.error('Error fetching delivery partners:', error);
+    return [];
+  }
+};
+
+export const createDeliveryPartner = async (partner: Omit<DeliveryPartner, 'id'>): Promise<string | null> => {
+  try {
+    const docRef = await addDoc(collection(db, 'deliveryPartners'), {
+      ...partner,
+      joinedAt: Timestamp.now(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating delivery partner:', error);
+    return null;
+  }
+};
+
+export const updateDeliveryPartner = async (id: string, updates: Partial<DeliveryPartner>): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'deliveryPartners', id);
+    await updateDoc(docRef, updates);
+    return true;
+  } catch (error) {
+    console.error('Error updating delivery partner:', error);
+    return false;
+  }
+};
+
+export const deleteDeliveryPartner = async (id: string): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'deliveryPartners', id);
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error('Error deleting delivery partner:', error);
+    return false;
+  }
+};
+
+// ============= PRODUCT CRUD =============
+
+export const createProduct = async (product: Omit<Product, 'id'>): Promise<string | null> => {
+  try {
+    const docRef = await addDoc(collection(db, 'products'), product);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating product:', error);
+    return null;
+  }
+};
+
+export const updateProduct = async (id: string, updates: Partial<Product>): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'products', id);
+    await updateDoc(docRef, updates);
+    return true;
+  } catch (error) {
+    console.error('Error updating product:', error);
+    return false;
+  }
+};
+
+export const deleteProduct = async (id: string): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'products', id);
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    return false;
+  }
+};
+
+// ============= CATEGORY CRUD =============
+
+export const createCategory = async (category: Category): Promise<string | null> => {
+  try {
+    const docRef = doc(db, 'categories', category.id);
+    await setDoc(docRef, category);
+    return category.id;
+  } catch (error) {
+    console.error('Error creating category:', error);
+    return null;
+  }
+};
+
+export const updateCategory = async (id: string, updates: Partial<Category>): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'categories', id);
+    await updateDoc(docRef, updates);
+    return true;
+  } catch (error) {
+    console.error('Error updating category:', error);
+    return false;
+  }
+};
+
+export const deleteCategory = async (id: string): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'categories', id);
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    return false;
+  }
+};
+
+// ============= USER ROLE MANAGEMENT =============
+
+export interface UserRole {
+  id: string;
+  userId: string;
+  role: 'admin' | 'delivery_partner' | 'customer';
+  createdAt: Date;
+  createdBy?: string;
+}
+
+export const checkUserRole = async (userId: string, role: string): Promise<boolean> => {
+  try {
+    const q = query(
+      collection(db, 'user_roles'),
+      where('userId', '==', userId),
+      where('role', '==', role)
+    );
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error('Error checking user role:', error);
+    return false;
+  }
+};
+
+export const getUserByPhone = async (phoneNumber: string): Promise<UserProfile | null> => {
+  try {
+    const q = query(collection(db, 'users'), where('phoneNumber', '==', phoneNumber));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      } as UserProfile;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching user by phone:', error);
+    return null;
+  }
+};
+
+// ============= OFFLINE ORDERS =============
+
+export const createOfflineOrder = async (order: {
+  customerPhone: string;
+  customerName: string;
+  deliveryAddress: string;
+  deliveryCoordinates?: { lat: number; lng: number };
+  items: OrderItem[];
+  total: number;
+  paymentMethod: 'cash' | 'upi' | 'card';
+}): Promise<string | null> => {
+  try {
+    const docRef = await addDoc(collection(db, 'orders'), {
+      userId: 'walk-in',
+      date: new Date().toISOString().split('T')[0],
+      status: 'confirmed',
+      total: order.total,
+      items: order.items,
+      deliveryAddress: order.deliveryAddress,
+      deliveryCoordinates: order.deliveryCoordinates,
+      customerPhone: order.customerPhone,
+      customerName: order.customerName,
+      paymentMethod: order.paymentMethod,
+      isOfflineOrder: true,
+      timeline: [
+        { status: 'Order Placed', time: new Date().toISOString(), completed: true },
+      ],
+      createdAt: Timestamp.now(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating offline order:', error);
+    return null;
+  }
+};
+
+// ============= ADMIN ORDERS =============
+
+export const getAllOrders = async (): Promise<Order[]> => {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'orders'));
+    const orders = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as Order;
+    });
+    return orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  } catch (error) {
+    console.error('Error fetching all orders:', error);
+    return [];
+  }
+};
+
+// ============= REAL-TIME LISTENERS =============
+
+export const subscribeToAllOrders = (
+  callback: (orders: Order[]) => void,
+  onError?: (error: Error) => void
+): (() => void) => {
+  const q = collection(db, 'orders');
+  
+  return onSnapshot(q, 
+    (snapshot) => {
+      const orders = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        } as Order;
+      });
+      // Sort client-side
+      orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      callback(orders);
+    },
+    (error) => {
+      console.error('Real-time orders error:', error);
+      onError?.(error);
+    }
+  );
+};
+
+export const subscribeToOrder = (
+  orderId: string,
+  callback: (order: Order | null) => void,
+  onError?: (error: Error) => void
+): (() => void) => {
+  const docRef = doc(db, 'orders', orderId);
+  
+  return onSnapshot(docRef, 
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        callback({
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        } as Order);
+      } else {
+        callback(null);
+      }
+    },
+    (error) => {
+      console.error('Real-time order error:', error);
+      onError?.(error);
+    }
+  );
+};
