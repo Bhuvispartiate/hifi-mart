@@ -27,6 +27,7 @@ import DeliveryProfile from "./pages/delivery/DeliveryProfile";
 import OnboardingWelcome from "./pages/onboarding/OnboardingWelcome";
 import OnboardingProfile from "./pages/onboarding/OnboardingProfile";
 import OnboardingAddress from "./pages/onboarding/OnboardingAddress";
+import OnboardingComplete from "./pages/onboarding/OnboardingComplete";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
                 <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><OnboardingWelcome /></ProtectedRoute>} />
                 <Route path="/onboarding/profile" element={<ProtectedRoute requireOnboarding={false}><OnboardingProfile /></ProtectedRoute>} />
                 <Route path="/onboarding/address" element={<ProtectedRoute requireOnboarding={false}><OnboardingAddress /></ProtectedRoute>} />
+                <Route path="/onboarding/complete" element={<ProtectedRoute requireOnboarding={false}><OnboardingComplete /></ProtectedRoute>} />
                 
                 {/* Protected routes - require auth and onboarding completion */}
                 <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />

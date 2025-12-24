@@ -137,7 +137,8 @@ const OnboardingAddress = () => {
         description: 'Your profile has been set up successfully',
       });
 
-      navigate('/', { replace: true });
+      // Navigate to completion screen
+      navigate('/onboarding/complete', { replace: true });
     } catch (error) {
       console.error('Error saving profile:', error);
       toast({
