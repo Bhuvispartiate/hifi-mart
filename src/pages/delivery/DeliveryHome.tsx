@@ -9,8 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
-import { useBrowserNotification } from '@/hooks/useBrowserNotification';
-import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp } from '@/lib/firestoreService';
+import { useFCM } from '@/hooks/useFCM';
+import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp, saveFCMToken } from '@/lib/firestoreService';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -87,12 +87,49 @@ export default function DeliveryHome() {
   const deliveryMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const hadOrderRef = useRef(false);
   const { play: playNotification, stop: stopNotification } = useNotificationSound(5);
-  const { requestPermission, showNotification } = useBrowserNotification();
+  const { 
+    fcmToken, 
+    isSupported: fcmSupported, 
+    requestPermissionAndGetToken,
+    setupForegroundMessageHandler 
+  } = useFCM();
 
-  // Request notification permission on mount
+  // Initialize FCM and save token
   useEffect(() => {
-    requestPermission();
-  }, [requestPermission]);
+    const initFCM = async () => {
+      if (fcmSupported && deliveryPartner?.id) {
+        const token = await requestPermissionAndGetToken();
+        if (token) {
+          // Save token to Firestore for this delivery partner
+          await saveFCMToken(deliveryPartner.id, token, 'delivery_partner');
+          console.log('FCM token saved for delivery partner:', deliveryPartner.id);
+        }
+      }
+    };
+    initFCM();
+  }, [fcmSupported, deliveryPartner?.id, requestPermissionAndGetToken]);
+
+  // Setup foreground message handler
+  useEffect(() => {
+    if (!fcmSupported) return;
+    
+    const unsubscribe = setupForegroundMessageHandler((payload) => {
+      console.log('Foreground FCM message:', payload);
+      
+      // Play notification sound
+      if (soundEnabled) {
+        playNotification();
+      }
+      
+      // Show in-app toast
+      toast({
+        title: payload.notification?.title || 'New Notification',
+        description: payload.notification?.body || 'You have a new notification',
+      });
+    });
+
+    return unsubscribe;
+  }, [fcmSupported, soundEnabled, playNotification, setupForegroundMessageHandler]);
 
   // Subscribe to real-time orders assigned to this delivery partner
   useEffect(() => {
@@ -114,12 +151,6 @@ export default function DeliveryHome() {
           if (soundEnabled) {
             playNotification();
           }
-          
-          // Show browser push notification
-          showNotification('🚀 New Delivery Assigned!', {
-            body: `Order #${myActiveOrder.id.slice(0, 8).toUpperCase()} - ₹${myActiveOrder.total}. Tap to accept.`,
-            tag: 'delivery-assigned',
-          });
           
           // Show in-app toast
           toast({
@@ -150,7 +181,7 @@ export default function DeliveryHome() {
     });
 
     return () => unsubscribe();
-  }, [deliveryPartner?.id, soundEnabled, playNotification, showNotification]);
+  }, [deliveryPartner?.id, soundEnabled, playNotification]);
 
   // Initialize map when navigating
   useEffect(() => {

@@ -27,7 +27,8 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { updateOrderStatus, Order, autoAssignDeliveryPartner } from '@/lib/firestoreService';
+import { updateOrderStatus, Order, autoAssignDeliveryPartner, saveFCMToken, getFCMToken } from '@/lib/firestoreService';
+import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,13 +60,15 @@ const AdminOrderRequests = () => {
     setupForegroundMessageHandler 
   } = useFCM();
 
-  // Initialize FCM on mount
+  // Initialize FCM on mount and save admin token
   useEffect(() => {
     const initFCM = async () => {
       if (fcmSupported && !fcmInitialized) {
         const token = await requestPermissionAndGetToken();
         if (token) {
-          console.log('FCM initialized with token');
+          // Save admin token to Firestore (using 'admin' as userId for now)
+          await saveFCMToken('admin_user', token, 'admin');
+          console.log('FCM initialized and token saved for admin');
           setFcmInitialized(true);
         }
       }
@@ -181,7 +184,30 @@ const AdminOrderRequests = () => {
     try {
       // Auto-assign delivery partner when accepting order
       const partner = await autoAssignDeliveryPartner(orderId);
+      
       if (partner) {
+        // Send FCM push notification to the assigned delivery partner
+        const partnerFcmToken = await getFCMToken(partner.id, 'delivery_partner');
+        if (partnerFcmToken) {
+          try {
+            await supabase.functions.invoke('send-fcm-notification', {
+              body: {
+                token: partnerFcmToken,
+                title: '🚀 New Delivery Assigned!',
+                body: `Order #${orderId.slice(0, 8).toUpperCase()} has been assigned to you. Tap to accept.`,
+                data: {
+                  orderId,
+                  type: 'delivery_assignment',
+                  url: '/delivery',
+                },
+              },
+            });
+            console.log('FCM notification sent to delivery partner:', partner.id);
+          } catch (fcmError) {
+            console.error('Failed to send FCM to delivery partner:', fcmError);
+          }
+        }
+        
         toast({
           title: 'Order Accepted',
           description: `Assigned to ${partner.name}. Awaiting delivery partner acceptance.`,

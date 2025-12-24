@@ -1005,3 +1005,81 @@ export const subscribeToUserOrders = (
     }
   );
 };
+
+// ============= FCM TOKENS =============
+
+export interface FCMToken {
+  token: string;
+  userId: string;
+  userType: 'admin' | 'delivery_partner' | 'customer';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Save FCM token for a user
+export const saveFCMToken = async (
+  userId: string,
+  token: string,
+  userType: 'admin' | 'delivery_partner' | 'customer'
+): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'fcmTokens', `${userType}_${userId}`);
+    await setDoc(docRef, {
+      token,
+      userId,
+      userType,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    }, { merge: true });
+    console.log(`FCM token saved for ${userType}: ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error saving FCM token:', error);
+    return false;
+  }
+};
+
+// Get FCM token for a user
+export const getFCMToken = async (
+  userId: string,
+  userType: 'admin' | 'delivery_partner' | 'customer'
+): Promise<string | null> => {
+  try {
+    const docRef = doc(db, 'fcmTokens', `${userType}_${userId}`);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data().token;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting FCM token:', error);
+    return null;
+  }
+};
+
+// Get all admin FCM tokens
+export const getAdminFCMTokens = async (): Promise<string[]> => {
+  try {
+    const q = query(collection(db, 'fcmTokens'), where('userType', '==', 'admin'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => doc.data().token);
+  } catch (error) {
+    console.error('Error getting admin FCM tokens:', error);
+    return [];
+  }
+};
+
+// Delete FCM token
+export const deleteFCMToken = async (
+  userId: string,
+  userType: 'admin' | 'delivery_partner' | 'customer'
+): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'fcmTokens', `${userType}_${userId}`);
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error('Error deleting FCM token:', error);
+    return false;
+  }
+};
