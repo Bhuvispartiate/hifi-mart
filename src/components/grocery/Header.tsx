@@ -86,7 +86,7 @@ export const Header = ({ showSearch = true, onCartClick }: HeaderProps) => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search for groceries, fruits, snacks..."
+                  placeholder="Search HiFi-Mart..."
                   className="pl-10 bg-muted border-0 h-11 rounded-xl text-sm"
                   readOnly
                 />
