@@ -236,9 +236,31 @@ const OrderStatus = () => {
               {order.timeline.map((step, index) => {
                 const isLast = index === order.timeline.length - 1;
                 const Icon = step.status === 'Delivered' ? CheckCircle :
+                            step.status === 'Reached Destination' ? MapPin :
                             step.status === 'Out for Delivery' ? Truck :
-                            step.status === 'Preparing' ? Package :
+                            step.status === 'Order Confirmed' ? CheckCircle :
+                            step.status === 'Order Placed' ? Package :
                             step.status === 'Cancelled' ? CheckCircle : Clock;
+                
+                // Get description for each status
+                const getStatusDescription = (status: string) => {
+                  switch (status) {
+                    case 'Order Placed':
+                      return 'Checking for stock availability';
+                    case 'Order Confirmed':
+                      return 'Awaiting for delivery partner';
+                    case 'Out for Delivery':
+                      return 'Order picked by delivery partner';
+                    case 'Reached Destination':
+                      return 'Delivery partner has arrived';
+                    case 'Delivered':
+                      return 'Order delivered successfully';
+                    case 'Cancelled':
+                      return 'Order was cancelled';
+                    default:
+                      return '';
+                  }
+                };
                 
                 return (
                   <div key={index} className="flex gap-3">
@@ -253,7 +275,7 @@ const OrderStatus = () => {
                         <Icon className="h-4 w-4" />
                       </div>
                       {!isLast && (
-                        <div className={`w-0.5 h-10 ${
+                        <div className={`w-0.5 h-12 ${
                           step.completed ? 'bg-primary' : 'bg-muted'
                         }`} />
                       )}
@@ -264,8 +286,11 @@ const OrderStatus = () => {
                       }`}>
                         {step.status}
                       </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {getStatusDescription(step.status)}
+                      </p>
                       {step.time && (
-                        <p className="text-sm text-muted-foreground">{step.time}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{step.time}</p>
                       )}
                     </div>
                   </div>

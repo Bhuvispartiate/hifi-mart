@@ -442,14 +442,11 @@ export default function DeliveryHome() {
           <div className="absolute top-4 left-4 right-4 z-10">
             <Card className="bg-background/95 backdrop-blur-sm">
               <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center mb-2">
                   <Badge variant="secondary" className="bg-success/20 text-success">
                     <Navigation className="w-3 h-3 mr-1" />
                     Navigating to Customer
                   </Badge>
-                  <Button variant="ghost" size="icon" onClick={handleEndNavigation}>
-                    <X className="w-5 h-5" />
-                  </Button>
                 </div>
 
                 <p className="text-sm font-medium">{currentOrder.deliveryAddress}</p>
