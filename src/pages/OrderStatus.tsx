@@ -16,7 +16,7 @@ const statusFlow = [
   { 
     key: 'pending', 
     label: 'Order Placed', 
-    description: 'Checking for stock availability',
+    description: 'Waiting for admin to confirm availability',
     icon: Package 
   },
   { 
@@ -177,8 +177,8 @@ const OrderStatus = () => {
                 <Package className="h-6 w-6 text-muted-foreground animate-pulse" />
               </div>
               <div>
-                <p className="font-medium text-foreground">Checking Availability</p>
-                <p className="text-sm text-muted-foreground">We're verifying stock for your order</p>
+                <p className="font-medium text-foreground">Order Received</p>
+                <p className="text-sm text-muted-foreground">Waiting for admin to confirm availability</p>
               </div>
             </div>
           </Card>
