@@ -1,23 +1,72 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Phone, MessageCircle, Clock, Package, CheckCircle, Truck, MapPin, Navigation, Loader2, KeyRound, Home } from 'lucide-react';
+import { ArrowLeft, Phone, MessageCircle, Clock, Package, CheckCircle, Truck, MapPin, Navigation, Loader2, KeyRound, Home, ChefHat, UserCheck, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { useOrder } from '@/hooks/useFirestoreData';
+import { useRealtimeOrder } from '@/hooks/useRealtimeOrders';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
 
+// Status configuration with order, icons, labels, and descriptions
+const statusFlow = [
+  { 
+    key: 'pending', 
+    label: 'Order Placed', 
+    description: 'Checking for stock availability',
+    icon: Package 
+  },
+  { 
+    key: 'confirmed', 
+    label: 'Confirmed', 
+    description: 'Awaiting delivery partner acceptance',
+    icon: CheckCircle 
+  },
+  { 
+    key: 'preparing', 
+    label: 'Preparing', 
+    description: 'Delivery partner accepted, preparing order',
+    icon: ChefHat 
+  },
+  { 
+    key: 'out_for_delivery', 
+    label: 'Out for Delivery', 
+    description: 'Order picked by delivery partner',
+    icon: Truck 
+  },
+  { 
+    key: 'reached_destination', 
+    label: 'Reached Destination', 
+    description: 'Delivery partner has arrived',
+    icon: MapPin 
+  },
+  { 
+    key: 'delivered', 
+    label: 'Delivered', 
+    description: 'Order delivered successfully',
+    icon: CheckCircle 
+  },
+];
+
 const OrderStatus = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { order, loading } = useOrder(orderId);
+  const { order, loading } = useRealtimeOrder(orderId || null);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Get current status index for timeline
+  const getCurrentStatusIndex = () => {
+    if (!order) return -1;
+    if (order.status === 'cancelled') return -1;
+    return statusFlow.findIndex(s => s.key === order.status);
+  };
+
+  const currentStatusIndex = getCurrentStatusIndex();
 
   // Initialize map if coordinates are available
   useEffect(() => {
@@ -88,6 +137,17 @@ const OrderStatus = () => {
     );
   }
 
+  // Get current status display info
+  const getCurrentStatusInfo = () => {
+    if (order.status === 'cancelled') {
+      return { label: 'Cancelled', color: 'bg-destructive text-destructive-foreground', icon: XCircle };
+    }
+    const status = statusFlow.find(s => s.key === order.status);
+    return status || statusFlow[0];
+  };
+
+  const currentStatus = getCurrentStatusInfo();
+
   return (
     <div className="min-h-screen bg-background pb-6">
       {/* Header */}
@@ -96,25 +156,95 @@ const OrderStatus = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate('/orders')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
+          <div className="flex-1">
             <h1 className="font-semibold text-foreground">Order #{order.id.slice(0, 8).toUpperCase()}</h1>
             <p className="text-xs text-muted-foreground">Track your order</p>
           </div>
+          <Badge className={order.status === 'cancelled' ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground'}>
+            {currentStatus.label}
+          </Badge>
         </div>
       </div>
 
-      {/* ETA Card for Out for Delivery */}
-      {order.status === 'out_for_delivery' && order.eta && (
+      {/* Status-specific Cards */}
+      
+      {/* Pending Status Card */}
+      {order.status === 'pending' && (
+        <div className="p-4">
+          <Card className="p-4 bg-muted/50 border-muted">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                <Package className="h-6 w-6 text-muted-foreground animate-pulse" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Checking Availability</p>
+                <p className="text-sm text-muted-foreground">We're verifying stock for your order</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Confirmed Status Card */}
+      {order.status === 'confirmed' && (
+        <div className="p-4">
+          <Card className="p-4 bg-accent/10 border-accent/30">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
+                <UserCheck className="h-6 w-6 text-accent-foreground animate-pulse" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Finding Delivery Partner</p>
+                <p className="text-sm text-muted-foreground">Awaiting delivery partner to accept your order</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Preparing Status Card */}
+      {order.status === 'preparing' && (
+        <div className="p-4">
+          <Card className="p-4 bg-primary/10 border-primary/30">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                <ChefHat className="h-6 w-6 text-primary animate-bounce" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Preparing Your Order</p>
+                <p className="text-sm text-muted-foreground">Delivery partner accepted and is preparing pickup</p>
+              </div>
+            </div>
+            {order.deliveryPartner && (
+              <div className="mt-3 pt-3 border-t border-border flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  <span className="text-sm font-bold text-primary">
+                    {order.deliveryPartner.name.charAt(0)}
+                  </span>
+                </div>
+                <span className="text-sm text-foreground">{order.deliveryPartner.name} will pick up soon</span>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Out for Delivery - ETA Card */}
+      {order.status === 'out_for_delivery' && (
         <div className="p-4">
           <Card className="p-4 bg-primary/5 border-primary/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Navigation className="h-6 w-6 text-primary" />
+                  <Navigation className="h-6 w-6 text-primary animate-pulse" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Arriving in</p>
-                  <p className="text-xl font-bold text-foreground">{order.eta}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {order.eta ? 'Arriving in' : 'On the way'}
+                  </p>
+                  <p className="text-xl font-bold text-foreground">
+                    {order.eta || 'Soon'}
+                  </p>
                 </div>
               </div>
               <Badge className="bg-primary text-primary-foreground">Live</Badge>
@@ -134,7 +264,7 @@ const OrderStatus = () => {
               <div className="flex-1">
                 <p className="text-sm text-muted-foreground mb-1">Your Delivery OTP</p>
                 <p className="text-3xl font-bold text-foreground tracking-widest">{order.deliveryOtp}</p>
-                <p className="text-xs text-muted-foreground mt-1">Share this code with the delivery partner to complete delivery</p>
+                <p className="text-xs text-muted-foreground mt-1">Share this code with the delivery partner</p>
               </div>
             </div>
           </Card>
@@ -149,7 +279,26 @@ const OrderStatus = () => {
               <Home className="h-5 w-5 text-primary" />
               <div>
                 <p className="font-medium text-foreground">Delivery partner has arrived!</p>
-                <p className="text-sm text-muted-foreground">Please share the OTP shown above to receive your order</p>
+                <p className="text-sm text-muted-foreground">Please share the OTP to receive your order</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Delivered Success Card */}
+      {order.status === 'delivered' && (
+        <div className="p-4">
+          <Card className="p-4 bg-success/10 border-success/30">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-success" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Order Delivered!</p>
+                <p className="text-sm text-muted-foreground">
+                  {order.deliveredAt ? `Delivered at ${order.deliveredAt}` : 'Thank you for ordering'}
+                </p>
               </div>
             </div>
           </Card>
@@ -157,8 +306,8 @@ const OrderStatus = () => {
       )}
 
       <div className="p-4 space-y-4">
-        {/* Delivery Partner Card */}
-        {order.deliveryPartner && order.status === 'out_for_delivery' && (
+        {/* Delivery Partner Card - Show for preparing, out_for_delivery, reached_destination */}
+        {order.deliveryPartner && ['preparing', 'out_for_delivery', 'reached_destination'].includes(order.status) && (
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -176,8 +325,10 @@ const OrderStatus = () => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="icon" className="rounded-full">
-                  <Phone className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="rounded-full" asChild>
+                  <a href={`tel:${order.deliveryPartner.phone}`}>
+                    <Phone className="h-4 w-4" />
+                  </a>
                 </Button>
                 <Button variant="outline" size="icon" className="rounded-full">
                   <MessageCircle className="h-4 w-4" />
@@ -187,8 +338,8 @@ const OrderStatus = () => {
           </Card>
         )}
 
-        {/* Delivery Location Map */}
-        {order.deliveryCoordinates && (
+        {/* Delivery Location Map - Show for out_for_delivery and reached_destination */}
+        {order.deliveryCoordinates && ['out_for_delivery', 'reached_destination'].includes(order.status) && (
           <Card className="overflow-hidden">
             <div className="relative">
               <div 
@@ -215,8 +366,8 @@ const OrderStatus = () => {
           </Card>
         )}
 
-        {/* Delivery Address (only if no coordinates) */}
-        {!order.deliveryCoordinates && (
+        {/* Delivery Address Card - Show for other statuses */}
+        {!['out_for_delivery', 'reached_destination'].includes(order.status) && (
           <Card className="p-4">
             <div className="flex items-start gap-3">
               <MapPin className="h-5 w-5 text-primary mt-0.5" />
@@ -228,80 +379,68 @@ const OrderStatus = () => {
           </Card>
         )}
 
-        {/* Order Timeline */}
-        {order.timeline && order.timeline.length > 0 && (
-          <Card className="p-4">
-            <h3 className="font-semibold text-foreground mb-4">Order Status</h3>
-            <div className="relative">
-              {order.timeline.map((step, index) => {
-                const isLast = index === order.timeline.length - 1;
-                const Icon = step.status === 'Delivered' ? CheckCircle :
-                            step.status === 'Reached Destination' ? MapPin :
-                            step.status === 'Out for Delivery' ? Truck :
-                            step.status === 'Preparing' ? Clock :
-                            step.status === 'Confirmed' ? CheckCircle :
-                            step.status === 'Order Placed' ? Package :
-                            step.status === 'Cancelled' ? CheckCircle : Clock;
-                
-                // Get description for each status
-                const getStatusDescription = (status: string) => {
-                  switch (status) {
-                    case 'Order Placed':
-                      return 'Checking for stock availability';
-                    case 'Confirmed':
-                      return 'Awaiting delivery partner acceptance';
-                    case 'Preparing':
-                      return 'Delivery partner accepted, preparing order';
-                    case 'Out for Delivery':
-                      return 'Order picked by delivery partner';
-                    case 'Reached Destination':
-                      return 'Delivery partner has arrived';
-                    case 'Delivered':
-                      return 'Order delivered successfully';
-                    case 'Cancelled':
-                      return 'Order was cancelled';
-                    default:
-                      return '';
-                  }
-                };
-                
+        {/* Order Timeline - Dynamic based on current status */}
+        <Card className="p-4">
+          <h3 className="font-semibold text-foreground mb-4">Order Progress</h3>
+          <div className="relative">
+            {order.status === 'cancelled' ? (
+              // Cancelled order timeline
+              <div className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center bg-destructive text-destructive-foreground">
+                    <XCircle className="h-4 w-4" />
+                  </div>
+                </div>
+                <div>
+                  <p className="font-medium text-destructive">Order Cancelled</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {order.cancelledReason || 'This order was cancelled'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Normal order timeline
+              statusFlow.map((status, index) => {
+                const isCompleted = index <= currentStatusIndex;
+                const isCurrent = index === currentStatusIndex;
+                const isLast = index === statusFlow.length - 1;
+                const Icon = status.icon;
+
                 return (
-                  <div key={index} className="flex gap-3">
+                  <div key={status.key} className="flex gap-3">
                     <div className="flex flex-col items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        step.completed 
-                          ? step.status === 'Cancelled' 
-                            ? 'bg-destructive text-destructive-foreground' 
-                            : 'bg-primary text-primary-foreground'
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        isCompleted 
+                          ? 'bg-primary text-primary-foreground'
                           : 'bg-muted text-muted-foreground'
-                      }`}>
-                        <Icon className="h-4 w-4" />
+                      } ${isCurrent ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}>
+                        <Icon className={`h-4 w-4 ${isCurrent ? 'animate-pulse' : ''}`} />
                       </div>
                       {!isLast && (
-                        <div className={`w-0.5 h-12 ${
-                          step.completed ? 'bg-primary' : 'bg-muted'
+                        <div className={`w-0.5 h-10 transition-all ${
+                          isCompleted && index < currentStatusIndex ? 'bg-primary' : 'bg-muted'
                         }`} />
                       )}
                     </div>
-                    <div className="pb-8">
+                    <div className={`pb-6 ${isLast ? 'pb-0' : ''}`}>
                       <p className={`font-medium ${
-                        step.completed ? 'text-foreground' : 'text-muted-foreground'
+                        isCompleted ? 'text-foreground' : 'text-muted-foreground'
                       }`}>
-                        {step.status}
+                        {status.label}
+                        {isCurrent && (
+                          <Badge variant="outline" className="ml-2 text-xs">Current</Badge>
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {getStatusDescription(step.status)}
+                        {status.description}
                       </p>
-                      {step.time && (
-                        <p className="text-xs text-muted-foreground mt-1">{step.time}</p>
-                      )}
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          </Card>
-        )}
+              })
+            )}
+          </div>
+        </Card>
 
         {/* Order Items */}
         <Card className="p-4">
@@ -323,15 +462,6 @@ const OrderStatus = () => {
             <span className="font-bold text-foreground">₹{order.total}</span>
           </div>
         </Card>
-
-        {/* Cancelled Reason */}
-        {order.status === 'cancelled' && order.cancelledReason && (
-          <Card className="p-4 border-destructive/50 bg-destructive/5">
-            <p className="text-sm text-destructive">
-              <strong>Cancellation Reason:</strong> {order.cancelledReason}
-            </p>
-          </Card>
-        )}
 
         {/* Help Button */}
         <Button variant="outline" className="w-full">
