@@ -80,6 +80,7 @@ const OnboardingAddress = () => {
     try {
       const name = sessionStorage.getItem('onboarding_name') || 'User';
       const email = sessionStorage.getItem('onboarding_email') || '';
+      const verifiedPhone = sessionStorage.getItem('onboarding_phone') || user.phoneNumber;
 
       const fullAddress = [
         addressLine.trim(),
@@ -94,6 +95,7 @@ const OnboardingAddress = () => {
         // Update existing profile
         const { updateUserProfile } = await import('@/lib/firestoreService');
         await updateUserProfile(user.uid, {
+          phoneNumber: verifiedPhone,
           displayName: name,
           email: email || undefined,
           addresses: [{
@@ -109,7 +111,7 @@ const OnboardingAddress = () => {
       } else {
         // Create new profile
         await createUserProfile(user.uid, {
-          phoneNumber: user.phoneNumber,
+          phoneNumber: verifiedPhone,
           displayName: name,
           email: email || undefined,
           addresses: [{
@@ -127,6 +129,7 @@ const OnboardingAddress = () => {
       // Clear session storage
       sessionStorage.removeItem('onboarding_name');
       sessionStorage.removeItem('onboarding_email');
+      sessionStorage.removeItem('onboarding_phone');
 
       toast({
         title: 'Welcome to HiFi-Mart!',
