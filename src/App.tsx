@@ -54,33 +54,34 @@ const App = () => (
               <Sonner />
               <BrowserRouter>
                 <Routes>
-                  {/* Auth route - only public route */}
+                  {/* Auth route */}
                   <Route path="/auth" element={<Auth />} />
                   
-                  {/* Onboarding routes - require auth but not onboarding completion */}
-                  <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><OnboardingWelcome /></ProtectedRoute>} />
-                  <Route path="/onboarding/profile" element={<ProtectedRoute requireOnboarding={false}><OnboardingProfile /></ProtectedRoute>} />
-                  <Route path="/onboarding/address" element={<ProtectedRoute requireOnboarding={false}><OnboardingAddress /></ProtectedRoute>} />
-                  <Route path="/onboarding/complete" element={<ProtectedRoute requireOnboarding={false}><OnboardingComplete /></ProtectedRoute>} />
+                  {/* Onboarding routes */}
+                  <Route path="/onboarding" element={<OnboardingWelcome />} />
+                  <Route path="/onboarding/profile" element={<OnboardingProfile />} />
+                  <Route path="/onboarding/address" element={<OnboardingAddress />} />
+                  <Route path="/onboarding/complete" element={<OnboardingComplete />} />
                   
-                  {/* Protected routes - require auth and onboarding completion */}
-                  <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-                  <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
-                  <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
-                  <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-                  <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-                  <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-                  <Route path="/product/:id" element={<ProtectedRoute><ProductDetail /></ProtectedRoute>} />
-                  <Route path="/order/:orderId" element={<ProtectedRoute><OrderStatus /></ProtectedRoute>} />
-                  <Route path="/profile/settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
+                  {/* Main app routes */}
+                  <Route path="/" element={<Home />} />
+                  <Route path="/categories" element={<Categories />} />
+                  <Route path="/offers" element={<Offers />} />
+                  <Route path="/orders" element={<Orders />} />
+                  <Route path="/account" element={<Account />} />
+                  <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/product/:id" element={<ProductDetail />} />
+                  <Route path="/order/:orderId" element={<OrderStatus />} />
+                  <Route path="/profile/settings" element={<ProfileSettings />} />
                   
-                  <Route path="/delivery" element={<ProtectedRoute><DeliveryHome /></ProtectedRoute>} />
-                  <Route path="/delivery/orders" element={<ProtectedRoute><DeliveryOrders /></ProtectedRoute>} />
-                  <Route path="/delivery/profile" element={<ProtectedRoute><DeliveryProfile /></ProtectedRoute>} />
+                  {/* Delivery routes */}
+                  <Route path="/delivery" element={<DeliveryHome />} />
+                  <Route path="/delivery/orders" element={<DeliveryOrders />} />
+                  <Route path="/delivery/profile" element={<DeliveryProfile />} />
 
                   {/* Admin routes */}
                   <Route path="/admin/login" element={<AdminLogin />} />
-                  <Route path="/admin" element={<AdminProtectedRoute><AdminLayout /></AdminProtectedRoute>}>
+                  <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboard />} />
                     <Route path="products" element={<AdminProducts />} />
                     <Route path="categories" element={<AdminCategories />} />
