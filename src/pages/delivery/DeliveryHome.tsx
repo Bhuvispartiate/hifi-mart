@@ -85,53 +85,39 @@ export default function DeliveryHome() {
 
   // Subscribe to real-time orders assigned to this delivery partner
   useEffect(() => {
+    if (!deliveryPartner?.id) return;
+
     const unsubscribe = subscribeToAllOrders((allOrders) => {
       setOrders(allOrders);
       
-      // Find order assigned to this delivery partner based on status
-      const myOrder = allOrders.find(o => o.deliveryPartner?.id === deliveryPartner?.id);
+      // Find active order assigned to this delivery partner (not delivered/cancelled)
+      const myActiveOrder = allOrders.find(o => 
+        o.deliveryPartner?.id === deliveryPartner.id &&
+        !['delivered', 'cancelled'].includes(o.status)
+      );
       
-      if (myOrder && !currentOrder) {
-        setCurrentOrder(myOrder);
+      if (myActiveOrder) {
+        setCurrentOrder(myActiveOrder);
         
         // Set UI status based on order status
-        if (myOrder.status === 'confirmed') {
-          setStatus('assigned'); // Waiting for acceptance
-        } else if (myOrder.status === 'preparing') {
-          setStatus('pickup'); // Accepted, waiting for pickup
-        } else if (myOrder.status === 'out_for_delivery') {
-          setStatus('navigating'); // Picked up, navigating
-        } else if (myOrder.status === 'reached_destination') {
-          setStatus('reached'); // Reached, waiting for OTP
+        if (myActiveOrder.status === 'confirmed') {
+          setStatus('assigned');
+        } else if (myActiveOrder.status === 'preparing') {
+          setStatus('pickup');
+        } else if (myActiveOrder.status === 'out_for_delivery') {
+          setStatus('navigating');
+        } else if (myActiveOrder.status === 'reached_destination') {
+          setStatus('reached');
         }
-      }
-      
-      // Update current order if it exists
-      if (currentOrder) {
-        const updatedOrder = allOrders.find(o => o.id === currentOrder.id);
-        if (updatedOrder) {
-          setCurrentOrder(updatedOrder);
-          
-          // Sync UI status with order status
-          if (updatedOrder.status === 'preparing' && status !== 'pickup') {
-            setStatus('pickup');
-          }
-          if (updatedOrder.status === 'out_for_delivery' && status !== 'navigating') {
-            setStatus('navigating');
-          }
-          if (updatedOrder.status === 'reached_destination' && status !== 'reached') {
-            setStatus('reached');
-          }
-          if (updatedOrder.status === 'delivered') {
-            setStatus('waiting');
-            setCurrentOrder(null);
-          }
-        }
+      } else {
+        // No active order for this partner
+        setCurrentOrder(null);
+        setStatus('waiting');
       }
     });
 
     return () => unsubscribe();
-  }, [currentOrder?.id, deliveryPartner?.id, status]);
+  }, [deliveryPartner?.id]);
 
   // Initialize map when navigating
   useEffect(() => {
