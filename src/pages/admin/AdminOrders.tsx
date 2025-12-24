@@ -39,20 +39,18 @@ import { toast } from '@/hooks/use-toast';
 import InvoiceDialog from '@/components/admin/InvoiceDialog';
 
 const statusOptions = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'preparing', label: 'Preparing' },
-  { value: 'out_for_delivery', label: 'Out for Delivery' },
+  { value: 'pending', label: 'Order Placed' },
+  { value: 'confirmed', label: 'Order Confirmed' },
+  { value: 'out_for_delivery', label: 'Out For Delivery' },
   { value: 'reached_destination', label: 'Reached Destination' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  pending: { label: 'Pending', variant: 'secondary' },
+  pending: { label: 'Order Placed', variant: 'secondary' },
   confirmed: { label: 'Confirmed', variant: 'default' },
-  preparing: { label: 'Preparing', variant: 'outline' },
-  out_for_delivery: { label: 'Out for Delivery', variant: 'default' },
+  out_for_delivery: { label: 'Out For Delivery', variant: 'default' },
   reached_destination: { label: 'Reached', variant: 'default' },
   delivered: { label: 'Delivered', variant: 'default' },
   cancelled: { label: 'Cancelled', variant: 'destructive' },
@@ -75,11 +73,11 @@ const AdminOrders = () => {
 
   const handleStatusChange = async (orderId: string, newStatus: Order['status']) => {
     try {
-      // Auto-assign delivery partner when moving to out_for_delivery
-      if (newStatus === 'out_for_delivery') {
+      // Auto-assign delivery partner when order is confirmed (awaiting delivery person)
+      if (newStatus === 'confirmed') {
         const partner = await autoAssignDeliveryPartner(orderId);
         if (partner) {
-          toast({ title: `Assigned to ${partner.name}` });
+          toast({ title: `Assigned to ${partner.name}`, description: 'Awaiting delivery partner acceptance' });
         } else {
           toast({ title: 'No delivery partner available', variant: 'destructive' });
         }
@@ -94,7 +92,7 @@ const AdminOrders = () => {
       }
 
       await updateOrderStatus(orderId, newStatus);
-      toast({ title: `Order status updated to ${newStatus.replace('_', ' ')}` });
+      toast({ title: `Order status updated to ${newStatus.replace(/_/g, ' ')}` });
     } catch (error) {
       toast({ title: 'Failed to update status', variant: 'destructive' });
     }
