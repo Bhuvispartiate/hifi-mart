@@ -7,7 +7,7 @@ interface AdminProtectedRouteProps {
 }
 
 const AdminProtectedRoute = ({ children }: AdminProtectedRouteProps) => {
-  const { adminUser, isAdmin, loading } = useAdminAuth();
+  const { adminUser, isAdmin, loading, isDemoMode } = useAdminAuth();
   const location = useLocation();
 
   if (loading) {
@@ -18,7 +18,8 @@ const AdminProtectedRoute = ({ children }: AdminProtectedRouteProps) => {
     );
   }
 
-  if (!adminUser || !isAdmin) {
+  // Allow access if demo mode is active OR if authenticated admin user
+  if (!isDemoMode && (!adminUser || !isAdmin)) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
