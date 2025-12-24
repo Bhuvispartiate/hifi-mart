@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
+import { useNotificationSound } from '@/hooks/useNotificationSound';
 import { 
   CheckCircle, 
   XCircle, 
@@ -12,7 +13,9 @@ import {
   MapPin, 
   Clock, 
   User,
-  ShoppingBag
+  ShoppingBag,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { 
   collection, 
@@ -42,6 +45,9 @@ const AdminOrderRequests = () => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const prevPendingCountRef = useRef<number>(0);
+  const { play: playNotification, stop: stopNotification } = useNotificationSound(4);
 
   useEffect(() => {
     // Subscribe to pending orders
@@ -69,7 +75,21 @@ const AdminOrderRequests = () => {
           createdAt: data.createdAt?.toDate() || new Date(),
         } as Order;
       });
-      setPendingOrders(orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+      const sortedOrders = orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      // Play notification if new pending orders arrived
+      if (sortedOrders.length > prevPendingCountRef.current && prevPendingCountRef.current > 0) {
+        if (soundEnabled) {
+          playNotification();
+        }
+        toast({
+          title: 'New Order Received!',
+          description: `${sortedOrders.length - prevPendingCountRef.current} new order(s) pending review`,
+        });
+      }
+      prevPendingCountRef.current = sortedOrders.length;
+      
+      setPendingOrders(sortedOrders);
       setLoading(false);
     });
 
@@ -271,9 +291,27 @@ const AdminOrderRequests = () => {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Order Requests</h1>
-        <p className="text-muted-foreground">Review and manage incoming orders</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Order Requests</h1>
+          <p className="text-muted-foreground">Review and manage incoming orders</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSoundEnabled(!soundEnabled);
+            if (!soundEnabled) {
+              stopNotification();
+            }
+          }}
+        >
+          {soundEnabled ? (
+            <><Volume2 className="h-4 w-4 mr-2" /> Sound On</>
+          ) : (
+            <><VolumeX className="h-4 w-4 mr-2" /> Sound Off</>
+          )}
+        </Button>
       </div>
 
       <Tabs defaultValue="pending" className="w-full">
