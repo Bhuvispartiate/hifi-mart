@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Loader2, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -14,7 +15,7 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { login } = useAdminAuth();
+  const { login, demoLogin } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -36,6 +37,11 @@ const AdminLogin = () => {
     setIsLoading(false);
   };
 
+  const handleDemoLogin = () => {
+    demoLogin();
+    navigate(from, { replace: true });
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -48,7 +54,26 @@ const AdminLogin = () => {
             Sign in with your admin credentials to access the dashboard
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {/* Demo Login Button */}
+          <Button 
+            variant="outline" 
+            className="w-full h-12 border-primary/50 hover:bg-primary/5"
+            onClick={handleDemoLogin}
+          >
+            <Sparkles className="h-5 w-5 mr-2 text-primary" />
+            Continue with Demo Account
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <Separator className="w-full" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or sign in with email</span>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <Alert variant="destructive">
@@ -94,15 +119,6 @@ const AdminLogin = () => {
               )}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 bg-muted rounded-lg">
-            <p className="text-xs text-muted-foreground text-center">
-              <strong>Demo Credentials:</strong><br />
-              Email: admin@grocery.com<br />
-              Password: admin123<br />
-              <span className="text-xs italic">(Add user_roles document in Firestore first)</span>
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

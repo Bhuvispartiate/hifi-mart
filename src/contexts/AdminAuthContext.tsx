@@ -6,14 +6,16 @@ import {
   onAuthStateChanged,
   User 
 } from 'firebase/auth';
-import { checkUserRole, UserRole } from '@/lib/firestoreService';
+import { checkUserRole } from '@/lib/firestoreService';
 
 interface AdminAuthContextType {
   adminUser: User | null;
   isAdmin: boolean;
   loading: boolean;
   error: string | null;
+  isDemoMode: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  demoLogin: () => void;
   logout: () => Promise<void>;
 }
 
@@ -24,13 +26,22 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   useEffect(() => {
+    // Check for demo admin in localStorage
+    const demoAdmin = localStorage.getItem('demo_admin');
+    if (demoAdmin) {
+      setIsAdmin(true);
+      setIsDemoMode(true);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAdminUser(user);
       
       if (user) {
-        // Check if user has admin role in Firestore
         const hasAdminRole = await checkUserRole(user.uid, 'admin');
         setIsAdmin(hasAdminRole);
       } else {
@@ -48,7 +59,6 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
-      // Check if user has admin role
       const hasAdminRole = await checkUserRole(userCredential.user.uid, 'admin');
       
       if (!hasAdminRole) {
@@ -72,10 +82,22 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const demoLogin = () => {
+    localStorage.setItem('demo_admin', 'true');
+    setIsAdmin(true);
+    setIsDemoMode(true);
+  };
+
   const logout = async () => {
     try {
-      await signOut(auth);
+      if (isDemoMode) {
+        localStorage.removeItem('demo_admin');
+        setIsDemoMode(false);
+      } else {
+        await signOut(auth);
+      }
       setIsAdmin(false);
+      setAdminUser(null);
     } catch (err) {
       console.error('Logout error:', err);
     }
@@ -88,7 +110,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         loading,
         error,
+        isDemoMode,
         login,
+        demoLogin,
         logout,
       }}
     >
