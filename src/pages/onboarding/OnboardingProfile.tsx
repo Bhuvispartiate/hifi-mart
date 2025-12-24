@@ -3,17 +3,97 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, User, Mail } from 'lucide-react';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { ArrowLeft, User, Mail, Phone, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
+type PhoneVerificationStep = 'input' | 'otp' | 'verified';
+
 const OnboardingProfile = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, sendOTP, verifyOTP, isDemoMode } = useAuth();
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [phoneStep, setPhoneStep] = useState<PhoneVerificationStep>('input');
+  const [verifiedPhone, setVerifiedPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+
+  const formatPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    return digits.slice(0, 10);
+  };
+
+  const handleSendOTP = async () => {
+    if (phoneNumber.length !== 10) {
+      toast({
+        title: 'Invalid Phone Number',
+        description: 'Please enter a valid 10-digit phone number',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setOtpLoading(true);
+    const fullPhone = `+91${phoneNumber}`;
+    const result = await sendOTP(fullPhone);
+    setOtpLoading(false);
+
+    if (result.success) {
+      setPhoneStep('otp');
+      toast({
+        title: 'OTP Sent',
+        description: isDemoMode ? 'Use 123456 as demo OTP' : 'Please check your phone for OTP',
+      });
+    } else {
+      toast({
+        title: 'Failed to send OTP',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) {
+      toast({
+        title: 'Invalid OTP',
+        description: 'Please enter a valid 6-digit OTP',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setOtpLoading(true);
+    const fullPhone = `+91${phoneNumber}`;
+    const result = await verifyOTP(fullPhone, otp);
+    setOtpLoading(false);
+
+    if (result.success) {
+      setPhoneStep('verified');
+      setVerifiedPhone(fullPhone);
+      toast({
+        title: 'Phone Verified',
+        description: 'Your phone number has been verified successfully',
+      });
+    } else {
+      toast({
+        title: 'Verification Failed',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleChangePhone = () => {
+    setPhoneStep('input');
+    setOtp('');
+    setVerifiedPhone('');
+  };
 
   const handleContinue = async () => {
     if (!name.trim()) {
@@ -34,11 +114,23 @@ const OnboardingProfile = () => {
       return;
     }
 
+    if (phoneStep !== 'verified') {
+      toast({
+        title: 'Phone Verification Required',
+        description: 'Please verify your phone number to continue',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // Store temporarily and navigate
     sessionStorage.setItem('onboarding_name', name.trim());
     sessionStorage.setItem('onboarding_email', email.trim());
+    sessionStorage.setItem('onboarding_phone', verifiedPhone);
     navigate('/onboarding/address');
   };
+
+  const canContinue = name.trim().length >= 2 && phoneStep === 'verified';
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -79,6 +171,7 @@ const OnboardingProfile = () => {
         </div>
 
         <div className="space-y-4">
+          {/* Name Input */}
           <div className="space-y-2">
             <Label htmlFor="name">Full Name *</Label>
             <div className="relative">
@@ -94,6 +187,135 @@ const OnboardingProfile = () => {
             </div>
           </div>
 
+          {/* Phone Number Verification */}
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone Number *</Label>
+            
+            {phoneStep === 'input' && (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="flex items-center justify-center px-3 bg-muted rounded-md border border-input">
+                    <span className="text-sm text-muted-foreground">+91</span>
+                  </div>
+                  <div className="relative flex-1">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="Enter mobile number"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
+                      className="pl-10"
+                      maxLength={10}
+                    />
+                  </div>
+                </div>
+                <Button 
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleSendOTP}
+                  disabled={otpLoading || phoneNumber.length !== 10}
+                >
+                  {otpLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending OTP...
+                    </>
+                  ) : (
+                    'Send OTP'
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {phoneStep === 'otp' && (
+              <div className="space-y-3">
+                <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between">
+                  <span className="text-sm text-foreground">+91 {phoneNumber}</span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-primary p-0 h-auto"
+                    onClick={handleChangePhone}
+                  >
+                    Change
+                  </Button>
+                </div>
+                
+                <div className="flex justify-center py-2">
+                  <InputOTP
+                    maxLength={6}
+                    value={otp}
+                    onChange={setOtp}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+
+                {isDemoMode && (
+                  <p className="text-sm text-center text-muted-foreground">
+                    Demo mode: Use OTP <span className="font-mono font-bold text-primary">123456</span>
+                  </p>
+                )}
+
+                <Button 
+                  type="button"
+                  className="w-full"
+                  onClick={handleVerifyOTP}
+                  disabled={otpLoading || otp.length !== 6}
+                >
+                  {otpLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify OTP'
+                  )}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-sm"
+                  onClick={() => {
+                    setOtp('');
+                    handleSendOTP();
+                  }}
+                  disabled={otpLoading}
+                >
+                  Resend OTP
+                </Button>
+              </div>
+            )}
+
+            {phoneStep === 'verified' && (
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                  <span className="text-sm font-medium text-foreground">{verifiedPhone}</span>
+                </div>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-primary p-0 h-auto"
+                  onClick={handleChangePhone}
+                >
+                  Change
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Email Input */}
           <div className="space-y-2">
             <Label htmlFor="email">Email (Optional)</Label>
             <div className="relative">
@@ -113,12 +335,6 @@ const OnboardingProfile = () => {
             </p>
           </div>
         </div>
-
-        <div className="bg-muted/50 rounded-xl p-4 mt-6">
-          <p className="text-sm text-muted-foreground">
-            📱 Phone: <span className="font-medium text-foreground">{user?.phoneNumber || 'Not set'}</span>
-          </p>
-        </div>
       </div>
 
       {/* Footer */}
@@ -126,7 +342,7 @@ const OnboardingProfile = () => {
         <Button 
           className="w-full h-12 text-base"
           onClick={handleContinue}
-          disabled={loading || !name.trim()}
+          disabled={loading || !canContinue}
         >
           Continue
         </Button>
