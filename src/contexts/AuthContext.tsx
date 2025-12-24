@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import { getUserProfile } from '@/lib/firestoreService';
-import { MOJOAUTH_API_KEY } from '@/lib/mojoauth';
+import { loadOTPlessSDK, OTPLESS_APP_ID, OTPlessCallback, OTPlessUser } from '@/lib/otpless';
 
 interface AuthUser {
   uid: string;
@@ -14,6 +14,7 @@ interface AuthContextType {
   loading: boolean;
   isDemoMode: boolean;
   onboardingCompleted: boolean | null;
+  initWhatsAppAuth: () => Promise<{ success: boolean; error?: string }>;
   sendOTP: (phoneNumber: string) => Promise<{ success: boolean; error?: string }>;
   verifyOTP: (phoneNumber: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   demoLogin: () => void;
@@ -24,11 +25,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo OTP for testing when MojoAuth fails
+// Demo OTP for testing when OTPless fails
 const DEMO_OTP = '123456';
 
-// Store state ID from MojoAuth for OTP verification
-let pendingStateId: string | null = null;
+// Store OTPless SDK instance
+let otplessInstance: any = null;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const pendingPhoneRef = useRef<string | null>(null);
+  const authCallbackRef = useRef<((user: OTPlessUser) => void) | null>(null);
 
   const checkOnboardingStatus = async (): Promise<boolean> => {
     if (!user) return false;
@@ -54,6 +56,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setOnboardingCompletedLocal = (completed: boolean) => {
     setOnboardingCompleted(completed);
   };
+
+  // Handle OTPless callback
+  const handleOTPlessCallback = useCallback((result: OTPlessCallback) => {
+    console.log('[OTPless] Callback received:', result);
+    
+    if (result.responseType === 'ONETAP' || result.responseType === 'OTP' || result.responseType === 'OAUTH') {
+      if (result.response) {
+        const otplessUser = result.response;
+        const phoneIdentity = otplessUser.identities?.find(
+          (id) => id.identityType === 'MOBILE' || id.identityType === 'PHONE'
+        );
+        const whatsappIdentity = otplessUser.identities?.find(
+          (id) => id.channel === 'WHATSAPP'
+        );
+        
+        const identity = whatsappIdentity || phoneIdentity || otplessUser.identities?.[0];
+        
+        const authUser: AuthUser = {
+          uid: otplessUser.userId || 'otpless-user-' + Date.now(),
+          phoneNumber: identity?.identityValue || pendingPhoneRef.current || '',
+          displayName: identity?.name || 'User',
+          accessToken: otplessUser.token,
+        };
+        
+        setUser(authUser);
+        localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+        pendingPhoneRef.current = null;
+        
+        if (authCallbackRef.current) {
+          authCallbackRef.current(otplessUser);
+        }
+      }
+    }
+  }, []);
+
+  // Initialize OTPless SDK
+  useEffect(() => {
+    const initOTPless = async () => {
+      try {
+        await loadOTPlessSDK();
+        
+        // Set up callback
+        (window as any).otpless = handleOTPlessCallback;
+        
+        // Initialize OTPless instance
+        if ((window as any).OTPless) {
+          otplessInstance = new (window as any).OTPless(handleOTPlessCallback);
+          console.log('[OTPless] Initialized successfully');
+        }
+      } catch (error) {
+        console.error('[OTPless] Initialization failed:', error);
+        setIsDemoMode(true);
+      }
+    };
+
+    initOTPless();
+  }, [handleOTPlessCallback]);
 
   useEffect(() => {
     // Check for stored user
@@ -78,8 +137,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.uid]);
 
+  // WhatsApp OAuth flow
+  const initWhatsAppAuth = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      console.log('[OTPless] Initiating WhatsApp OAuth...');
+      
+      if (!otplessInstance) {
+        console.log('[OTPless] SDK not initialized, falling back to demo mode');
+        setIsDemoMode(true);
+        return { success: true };
+      }
+
+      // Initiate WhatsApp OAuth
+      await otplessInstance.initiate({
+        channel: 'WHATSAPP',
+        channelType: 'WHATSAPP',
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('[OTPless] WhatsApp auth error:', error);
+      setIsDemoMode(true);
+      return { success: true };
+    }
+  };
+
+  // Phone OTP flow (fallback)
   const sendOTP = async (phoneNumber: string): Promise<{ success: boolean; error?: string }> => {
-    // Validate phone number format
     if (!phoneNumber || phoneNumber.length < 10) {
       return { success: false, error: 'Please enter a valid phone number' };
     }
@@ -87,43 +171,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pendingPhoneRef.current = phoneNumber;
 
     try {
-      console.log('[MojoAuth] Sending OTP to:', phoneNumber);
-      console.log('[MojoAuth] Using API Key:', MOJOAUTH_API_KEY);
+      console.log('[OTPless] Sending OTP to:', phoneNumber);
       
-      // Use MojoAuth REST API to send OTP
-      const response = await fetch('https://api.mojoauth.com/users/phone', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': MOJOAUTH_API_KEY,
-        },
-        body: JSON.stringify({
-          phone: phoneNumber,
-        }),
-      });
-
-      console.log('[MojoAuth] Response status:', response.status);
-      const data = await response.json();
-      console.log('[MojoAuth] Response data:', JSON.stringify(data, null, 2));
-
-      if (response.ok && data.state_id) {
-        pendingStateId = data.state_id;
-        console.log('[MojoAuth] OTP sent successfully, state_id:', data.state_id);
-        setIsDemoMode(false);
-        return { success: true };
-      } else {
-        console.error('[MojoAuth] API Error:', data);
-        // Fall back to demo mode
-        console.log('[MojoAuth] Falling back to demo mode. Use OTP: 123456');
+      if (!otplessInstance) {
+        console.log('[OTPless] SDK not initialized, falling back to demo mode');
         setIsDemoMode(true);
         return { success: true };
       }
+
+      // Extract country code and phone
+      const countryCode = phoneNumber.startsWith('+') ? phoneNumber.slice(0, 3) : '+91';
+      const phone = phoneNumber.replace(/^\+\d{1,3}/, '');
+
+      await otplessInstance.initiate({
+        channel: 'PHONE',
+        phone: phone,
+        countryCode: countryCode,
+      });
+
+      setIsDemoMode(false);
+      return { success: true };
     } catch (error: any) {
-      console.error('[MojoAuth] ❌ sendOTP ERROR:', error);
-      console.error('[MojoAuth] Error message:', error?.message);
-      
-      // Fall back to demo mode if MojoAuth fails
-      console.log('[MojoAuth] Falling back to demo mode. Use OTP: 123456');
+      console.error('[OTPless] sendOTP ERROR:', error);
+      console.log('[OTPless] Falling back to demo mode. Use OTP: 123456');
       setIsDemoMode(true);
       return { success: true };
     }
@@ -141,57 +211,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(demoUser);
         localStorage.setItem('grocery_auth_user', JSON.stringify(demoUser));
         pendingPhoneRef.current = null;
-        pendingStateId = null;
         return { success: true };
       }
       return { success: false, error: 'Invalid OTP. Use 123456' };
     }
 
     try {
-      console.log('[MojoAuth] Verifying OTP:', otp);
-      console.log('[MojoAuth] State ID:', pendingStateId);
+      console.log('[OTPless] Verifying OTP:', otp);
       
-      if (!pendingStateId) {
-        throw new Error('No pending verification. Please request OTP again.');
+      if (!otplessInstance) {
+        throw new Error('OTPless not initialized');
       }
 
-      // Use MojoAuth REST API to verify OTP
-      const response = await fetch('https://api.mojoauth.com/users/phone/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': MOJOAUTH_API_KEY,
-        },
-        body: JSON.stringify({
-          state_id: pendingStateId,
-          otp: otp,
-        }),
+      const countryCode = phoneNumber.startsWith('+') ? phoneNumber.slice(0, 3) : '+91';
+      const phone = phoneNumber.replace(/^\+\d{1,3}/, '');
+
+      // Create a promise to wait for callback
+      const verifyPromise = new Promise<{ success: boolean; error?: string }>((resolve) => {
+        const timeout = setTimeout(() => {
+          resolve({ success: false, error: 'Verification timeout. Please try again.' });
+        }, 30000);
+
+        authCallbackRef.current = () => {
+          clearTimeout(timeout);
+          resolve({ success: true });
+        };
       });
 
-      console.log('[MojoAuth] Verify response status:', response.status);
-      const data = await response.json();
-      console.log('[MojoAuth] Verify response data:', JSON.stringify(data, null, 2));
+      await otplessInstance.verify({
+        channel: 'PHONE',
+        phone: phone,
+        otp: otp,
+        countryCode: countryCode,
+      });
 
-      if (response.ok && data.authenticated) {
-        const authUser: AuthUser = {
-          uid: data.user?.user_id || 'mojo-user-' + Date.now(),
-          phoneNumber: phoneNumber || pendingPhoneRef.current || '',
-          displayName: 'User',
-          accessToken: data.oauth?.access_token,
-        };
-        setUser(authUser);
-        localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
-        pendingPhoneRef.current = null;
-        pendingStateId = null;
-        return { success: true };
-      }
-
-      return { success: false, error: data.message || 'Verification failed. Please try again.' };
+      return await verifyPromise;
     } catch (error: any) {
-      console.error('[MojoAuth] ❌ verifyOTP ERROR:', error);
-      console.error('[MojoAuth] Error message:', error?.message);
+      console.error('[OTPless] verifyOTP ERROR:', error);
       
-      // If MojoAuth verification fails, try demo OTP as fallback
+      // If OTPless verification fails, try demo OTP as fallback
       if (otp === DEMO_OTP) {
         const demoUser: AuthUser = {
           uid: 'demo-user-' + Date.now(),
@@ -201,7 +259,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(demoUser);
         localStorage.setItem('grocery_auth_user', JSON.stringify(demoUser));
         pendingPhoneRef.current = null;
-        pendingStateId = null;
         setIsDemoMode(true);
         return { success: true };
       }
@@ -227,7 +284,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsDemoMode(false);
     localStorage.removeItem('grocery_auth_user');
     pendingPhoneRef.current = null;
-    pendingStateId = null;
   };
 
   return (
@@ -237,6 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isDemoMode,
         onboardingCompleted,
+        initWhatsAppAuth,
         sendOTP,
         verifyOTP,
         demoLogin,
