@@ -22,7 +22,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { updateOrderStatus, Order } from '@/lib/firestoreService';
+import { updateOrderStatus, Order, autoAssignDeliveryPartner } from '@/lib/firestoreService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,13 +107,22 @@ const AdminOrderRequests = () => {
   const handleAccept = async (orderId: string) => {
     setProcessingId(orderId);
     try {
-      const success = await updateOrderStatus(orderId, 'confirmed');
-      if (success) {
+      // Auto-assign delivery partner when accepting order
+      const partner = await autoAssignDeliveryPartner(orderId);
+      if (partner) {
         toast({
           title: 'Order Accepted',
-          description: 'Order is now awaiting delivery partner.',
+          description: `Assigned to ${partner.name}. Awaiting delivery partner acceptance.`,
         });
       } else {
+        toast({
+          title: 'Order Accepted',
+          description: 'No delivery partner available. Order confirmed.',
+        });
+      }
+
+      const success = await updateOrderStatus(orderId, 'confirmed');
+      if (!success) {
         throw new Error('Failed to update order');
       }
     } catch (error) {
