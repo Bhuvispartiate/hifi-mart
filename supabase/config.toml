@@ -1,1 +1,4 @@
 project_id = "mdpyvsotcmwplhgnlnuc"
+
+[functions.send-fcm-notification]
+verify_jwt = false

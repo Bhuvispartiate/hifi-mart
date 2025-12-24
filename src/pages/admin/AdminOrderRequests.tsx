@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
-import { useBrowserNotification } from '@/hooks/useBrowserNotification';
+import { useFCM } from '@/hooks/useFCM';
 import { 
   CheckCircle, 
   XCircle, 
@@ -48,15 +48,52 @@ const AdminOrderRequests = () => {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [fcmInitialized, setFcmInitialized] = useState(false);
   const prevPendingCountRef = useRef<number>(0);
   const isInitialLoadRef = useRef(true);
   const { play: playNotification, stop: stopNotification } = useNotificationSound(4);
-  const { isGranted, requestPermission, showNotification } = useBrowserNotification();
+  const { 
+    fcmToken, 
+    isSupported: fcmSupported, 
+    requestPermissionAndGetToken,
+    setupForegroundMessageHandler 
+  } = useFCM();
 
-  // Request notification permission on mount
+  // Initialize FCM on mount
   useEffect(() => {
-    requestPermission();
-  }, [requestPermission]);
+    const initFCM = async () => {
+      if (fcmSupported && !fcmInitialized) {
+        const token = await requestPermissionAndGetToken();
+        if (token) {
+          console.log('FCM initialized with token');
+          setFcmInitialized(true);
+        }
+      }
+    };
+    initFCM();
+  }, [fcmSupported, fcmInitialized, requestPermissionAndGetToken]);
+
+  // Setup foreground message handler
+  useEffect(() => {
+    if (!fcmSupported) return;
+    
+    const unsubscribe = setupForegroundMessageHandler((payload) => {
+      console.log('Foreground FCM message:', payload);
+      
+      // Play notification sound
+      if (soundEnabled) {
+        playNotification();
+      }
+      
+      // Show in-app toast
+      toast({
+        title: payload.notification?.title || 'New Notification',
+        description: payload.notification?.body || 'You have a new notification',
+      });
+    });
+
+    return unsubscribe;
+  }, [fcmSupported, soundEnabled, playNotification, setupForegroundMessageHandler]);
 
   useEffect(() => {
     // Subscribe to pending orders
@@ -89,16 +126,10 @@ const AdminOrderRequests = () => {
       // Play notification if new pending orders arrived (skip initial load)
       const newOrderCount = sortedOrders.length - prevPendingCountRef.current;
       if (!isInitialLoadRef.current && newOrderCount > 0) {
-        // Play ringtone sound
+        // Play ringtone sound (fallback if FCM foreground handler didn't trigger)
         if (soundEnabled) {
           playNotification();
         }
-        
-        // Show browser push notification
-        showNotification('🛒 New Order Received!', {
-          body: `${newOrderCount} new order(s) pending review. Click to view.`,
-          tag: 'new-order',
-        });
         
         // Show in-app toast
         toast({
