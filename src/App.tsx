@@ -7,6 +7,7 @@ import { CartProvider } from "@/contexts/CartContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
+import { DeliveryAuthProvider } from "@/contexts/DeliveryAuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/admin/AdminProtectedRoute";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -22,6 +23,7 @@ import ProfileSettings from "./pages/ProfileSettings";
 
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import DeliveryLogin from "./pages/delivery/DeliveryLogin";
 import DeliveryHome from "./pages/delivery/DeliveryHome";
 import DeliveryOrders from "./pages/delivery/DeliveryOrders";
 import DeliveryProfile from "./pages/delivery/DeliveryProfile";
@@ -48,53 +50,56 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <AdminAuthProvider>
-          <LocationProvider>
-            <CartProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <Routes>
-                  {/* Auth route */}
-                  <Route path="/auth" element={<Auth />} />
-                  
-                  {/* Onboarding routes */}
-                  <Route path="/onboarding" element={<OnboardingWelcome />} />
-                  <Route path="/onboarding/profile" element={<OnboardingProfile />} />
-                  <Route path="/onboarding/address" element={<OnboardingAddress />} />
-                  <Route path="/onboarding/complete" element={<OnboardingComplete />} />
-                  
-                  {/* Main app routes */}
-                  <Route path="/" element={<Home />} />
-                  <Route path="/categories" element={<Categories />} />
-                  <Route path="/offers" element={<Offers />} />
-                  <Route path="/orders" element={<Orders />} />
-                  <Route path="/account" element={<Account />} />
-                  <Route path="/checkout" element={<Checkout />} />
-                  <Route path="/product/:id" element={<ProductDetail />} />
-                  <Route path="/order/:orderId" element={<OrderStatus />} />
-                  <Route path="/profile/settings" element={<ProfileSettings />} />
-                  
-                  {/* Delivery routes */}
-                  <Route path="/delivery" element={<DeliveryHome />} />
-                  <Route path="/delivery/orders" element={<DeliveryOrders />} />
-                  <Route path="/delivery/profile" element={<DeliveryProfile />} />
+          <DeliveryAuthProvider>
+            <LocationProvider>
+              <CartProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <Routes>
+                    {/* Auth route */}
+                    <Route path="/auth" element={<Auth />} />
+                    
+                    {/* Onboarding routes */}
+                    <Route path="/onboarding" element={<OnboardingWelcome />} />
+                    <Route path="/onboarding/profile" element={<OnboardingProfile />} />
+                    <Route path="/onboarding/address" element={<OnboardingAddress />} />
+                    <Route path="/onboarding/complete" element={<OnboardingComplete />} />
+                    
+                    {/* Main app routes */}
+                    <Route path="/" element={<Home />} />
+                    <Route path="/categories" element={<Categories />} />
+                    <Route path="/offers" element={<Offers />} />
+                    <Route path="/orders" element={<Orders />} />
+                    <Route path="/account" element={<Account />} />
+                    <Route path="/checkout" element={<Checkout />} />
+                    <Route path="/product/:id" element={<ProductDetail />} />
+                    <Route path="/order/:orderId" element={<OrderStatus />} />
+                    <Route path="/profile/settings" element={<ProfileSettings />} />
+                    
+                    {/* Delivery routes */}
+                    <Route path="/delivery/login" element={<DeliveryLogin />} />
+                    <Route path="/delivery" element={<DeliveryHome />} />
+                    <Route path="/delivery/orders" element={<DeliveryOrders />} />
+                    <Route path="/delivery/profile" element={<DeliveryProfile />} />
 
-                  {/* Admin routes */}
-                  <Route path="/admin/login" element={<AdminLogin />} />
-                  <Route path="/admin" element={<AdminLayout />}>
-                    <Route index element={<AdminDashboard />} />
-                    <Route path="products" element={<AdminProducts />} />
-                    <Route path="categories" element={<AdminCategories />} />
-                    <Route path="orders" element={<AdminOrders />} />
-                    <Route path="delivery-partners" element={<AdminDeliveryPartners />} />
-                    <Route path="home-delivery" element={<AdminHomeDelivery />} />
-                  </Route>
+                    {/* Admin routes */}
+                    <Route path="/admin/login" element={<AdminLogin />} />
+                    <Route path="/admin" element={<AdminLayout />}>
+                      <Route index element={<AdminDashboard />} />
+                      <Route path="products" element={<AdminProducts />} />
+                      <Route path="categories" element={<AdminCategories />} />
+                      <Route path="orders" element={<AdminOrders />} />
+                      <Route path="delivery-partners" element={<AdminDeliveryPartners />} />
+                      <Route path="home-delivery" element={<AdminHomeDelivery />} />
+                    </Route>
 
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </BrowserRouter>
-            </CartProvider>
-          </LocationProvider>
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </BrowserRouter>
+              </CartProvider>
+            </LocationProvider>
+          </DeliveryAuthProvider>
         </AdminAuthProvider>
       </AuthProvider>
     </TooltipProvider>
