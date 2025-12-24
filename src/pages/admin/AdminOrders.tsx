@@ -3,8 +3,7 @@ import { useRealtimeOrders } from '@/hooks/useRealtimeOrders';
 import { 
   updateOrderStatus, 
   Order, 
-  autoAssignDeliveryPartner,
-  setDeliveryOtp
+  autoAssignDeliveryPartner
 } from '@/lib/firestoreService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,13 +84,8 @@ const AdminOrders = () => {
         }
       }
 
-      // Generate OTP when reaching destination
-      if (newStatus === 'reached_destination') {
-        const otp = await setDeliveryOtp(orderId);
-        if (otp) {
-          toast({ title: `OTP generated: ${otp}`, description: 'Customer will see this OTP' });
-        }
-      }
+      // Note: OTP is only generated when delivery partner clicks "Reached Destination"
+      // Admin cannot manually trigger OTP generation
 
       await updateOrderStatus(orderId, newStatus);
       toast({ title: `Order status updated to ${newStatus.replace(/_/g, ' ')}` });

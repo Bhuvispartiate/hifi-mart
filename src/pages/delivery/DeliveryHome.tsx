@@ -8,7 +8,7 @@ import { DeliveryBottomNav } from '@/components/delivery/DeliveryBottomNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
-import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp } from '@/lib/firestoreService';
+import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp } from '@/lib/firestoreService';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -435,9 +435,16 @@ export default function DeliveryHome() {
     if (!currentOrder) return;
     
     try {
+      // Generate OTP first
+      const otp = await setDeliveryOtp(currentOrder.id);
+      if (otp) {
+        console.log('OTP generated:', otp);
+      }
+      
+      // Then update status
       await updateOrderStatus(currentOrder.id, 'reached_destination');
       setStatus('reached');
-      toast({ title: 'Customer has been notified', description: 'Wait for OTP verification' });
+      toast({ title: 'Customer has been notified', description: 'OTP sent to customer. Wait for verification.' });
     } catch (error) {
       toast({ title: 'Error updating status', variant: 'destructive' });
     }
