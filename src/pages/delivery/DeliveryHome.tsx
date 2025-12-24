@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MapPin, Package, Store, Clock, CheckCircle2, Navigation, Phone, X, KeyRound, Loader2 } from 'lucide-react';
+import { MapPin, Package, Store, Clock, CheckCircle2, Navigation, Phone, X, KeyRound, Loader2, Bike } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -53,8 +53,12 @@ export default function DeliveryHome() {
   const [verifying, setVerifying] = useState(false);
   const [routeOptions, setRouteOptions] = useState<RouteOption[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const startCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const endCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const deliveryMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   // Subscribe to real-time orders assigned to this delivery partner
   useEffect(() => {
@@ -111,11 +115,16 @@ export default function DeliveryHome() {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
+        startCoordsRef.current = currentPos;
+        endCoordsRef.current = destinationCoords;
         initializeMap(currentPos, destinationCoords);
       },
       () => {
         // Fallback if geolocation fails - use Chennai area coordinates
-        initializeMap({ lat: 13.0827, lng: 80.2707 }, destinationCoords);
+        const fallbackStart = { lat: 13.0827, lng: 80.2707 };
+        startCoordsRef.current = fallbackStart;
+        endCoordsRef.current = destinationCoords;
+        initializeMap(fallbackStart, destinationCoords);
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -228,7 +237,15 @@ export default function DeliveryHome() {
         zoom: 13,
       });
 
-      new mapboxgl.Marker({ color: '#3B82F6' }).setLngLat([start.lng, start.lat]).addTo(map.current);
+      // Create custom bike marker element
+      const bikeEl = document.createElement('div');
+      bikeEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`;
+      bikeEl.style.cursor = 'pointer';
+
+      deliveryMarkerRef.current = new mapboxgl.Marker({ element: bikeEl })
+        .setLngLat([start.lng, start.lat])
+        .addTo(map.current);
+
       new mapboxgl.Marker({ color: '#22C55E' }).setLngLat([end.lng, end.lat]).addTo(map.current);
 
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -241,13 +258,13 @@ export default function DeliveryHome() {
         'top-right'
       );
 
-      fetchRoute(start, end);
+      fetchRoute(start, end, true);
     } catch (error) {
       console.error('Error initializing map:', error);
     }
   };
 
-  const fetchRoute = async (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
+  const fetchRoute = async (start: { lat: number; lng: number }, end: { lat: number; lng: number }, fitBounds = false) => {
     if (!map.current) return;
 
     try {
@@ -273,8 +290,9 @@ export default function DeliveryHome() {
       if (!routes.length) throw new Error('No routes returned');
 
       setRouteOptions(routes);
-      setSelectedRouteIndex(0);
-      applyRoutesToMap(routes, 0, { fit: true });
+      setSelectedRouteIndex((prev) => (prev < routes.length ? prev : 0));
+      applyRoutesToMap(routes, selectedRouteIndex < routes.length ? selectedRouteIndex : 0, { fit: fitBounds });
+      setLastRefresh(new Date());
     } catch (error) {
       console.error('Error fetching route:', error);
       toast({
@@ -284,6 +302,41 @@ export default function DeliveryHome() {
       });
     }
   };
+
+  // Live ETA refresh every 30 seconds
+  useEffect(() => {
+    if (status !== 'navigating') return;
+
+    const intervalId = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const currentPos = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+          startCoordsRef.current = currentPos;
+
+          // Update delivery marker position
+          if (deliveryMarkerRef.current) {
+            deliveryMarkerRef.current.setLngLat([currentPos.lng, currentPos.lat]);
+          }
+
+          if (endCoordsRef.current) {
+            fetchRoute(currentPos, endCoordsRef.current, false);
+          }
+        },
+        () => {
+          // If geolocation fails, use stored coords
+          if (startCoordsRef.current && endCoordsRef.current) {
+            fetchRoute(startCoordsRef.current, endCoordsRef.current, false);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [status, selectedRouteIndex]);
 
   useEffect(() => {
     if (status !== 'navigating') return;
