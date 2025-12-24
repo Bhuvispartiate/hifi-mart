@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { 
   User, Phone, Mail, MapPin, Star, Package, 
   IndianRupee, Calendar, ChevronRight, LogOut,
@@ -11,39 +10,18 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { DeliveryBottomNav } from '@/components/delivery/DeliveryBottomNav';
 import { useNavigate } from 'react-router-dom';
-
-interface DeliveryPartnerProfile {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  avatar?: string;
-  vehicleType: string;
-  vehicleNumber: string;
-  rating: number;
-  totalDeliveries: number;
-  totalEarnings: number;
-  joinedDate: string;
-  isVerified: boolean;
-}
-
-const mockProfile: DeliveryPartnerProfile = {
-  id: 'DP-2024-001',
-  name: 'Ramesh Kumar',
-  phone: '+91 98765 43210',
-  email: 'ramesh.kumar@email.com',
-  vehicleType: 'Bike',
-  vehicleNumber: 'DL 01 AB 1234',
-  rating: 4.8,
-  totalDeliveries: 342,
-  totalEarnings: 15420,
-  joinedDate: 'January 2024',
-  isVerified: true,
-};
+import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
+import { useEffect } from 'react';
 
 export default function DeliveryProfile() {
   const navigate = useNavigate();
-  const [profile] = useState<DeliveryPartnerProfile>(mockProfile);
+  const { deliveryPartner, isAuthenticated, logout } = useDeliveryAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/delivery/login');
+    }
+  }, [isAuthenticated, navigate]);
 
   const menuItems = [
     { icon: FileText, label: 'Documents', path: '/delivery/documents' },
@@ -53,8 +31,13 @@ export default function DeliveryProfile() {
   ];
 
   const handleLogout = () => {
-    navigate('/auth');
+    logout();
+    navigate('/delivery/login');
   };
+
+  if (!deliveryPartner) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -69,23 +52,22 @@ export default function DeliveryProfile() {
           <CardContent className="p-4">
             <div className="flex items-center gap-4">
               <Avatar className="w-16 h-16">
-                <AvatarImage src={profile.avatar} />
                 <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                  {profile.name.split(' ').map(n => n[0]).join('')}
+                  {deliveryPartner.name.split(' ').map(n => n[0]).join('')}
                 </AvatarFallback>
               </Avatar>
               
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="font-semibold text-lg">{profile.name}</h2>
-                  {profile.isVerified && (
-                    <Badge variant="secondary" className="text-xs">Verified</Badge>
+                  <h2 className="font-semibold text-lg">{deliveryPartner.name}</h2>
+                  {deliveryPartner.isActive && (
+                    <Badge variant="secondary" className="text-xs">Active</Badge>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground">{profile.id}</p>
+                <p className="text-sm text-muted-foreground">ID: {deliveryPartner.id.slice(0, 8)}</p>
                 <div className="flex items-center gap-1 mt-1">
                   <Star className="w-4 h-4 fill-accent text-accent" />
-                  <span className="font-medium">{profile.rating}</span>
+                  <span className="font-medium">{deliveryPartner.rating.toFixed(1)}</span>
                   <span className="text-sm text-muted-foreground">Rating</span>
                 </div>
               </div>
@@ -96,12 +78,14 @@ export default function DeliveryProfile() {
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-2 text-sm">
                 <Phone className="w-4 h-4 text-muted-foreground" />
-                <span>{profile.phone}</span>
+                <span>{deliveryPartner.phone}</span>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="w-4 h-4 text-muted-foreground" />
-                <span className="truncate">{profile.email}</span>
-              </div>
+              {deliveryPartner.email && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
+                  <span className="truncate">{deliveryPartner.email}</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -114,15 +98,15 @@ export default function DeliveryProfile() {
             <h3 className="font-semibold mb-3">Overall Stats</h3>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-2xl font-bold text-primary">{profile.totalDeliveries}</p>
+                <p className="text-2xl font-bold text-primary">{deliveryPartner.totalDeliveries}</p>
                 <p className="text-xs text-muted-foreground">Deliveries</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-primary">₹{profile.totalEarnings.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Earnings</p>
+                <p className="text-2xl font-bold text-primary capitalize">{deliveryPartner.vehicleType}</p>
+                <p className="text-xs text-muted-foreground">Vehicle</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-primary">{profile.rating}</p>
+                <p className="text-2xl font-bold text-primary">{deliveryPartner.rating.toFixed(1)}</p>
                 <p className="text-xs text-muted-foreground">Rating</p>
               </div>
             </div>
@@ -136,15 +120,15 @@ export default function DeliveryProfile() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Vehicle Type</span>
-                <span className="font-medium">{profile.vehicleType}</span>
+                <span className="font-medium capitalize">{deliveryPartner.vehicleType}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Vehicle Number</span>
-                <span className="font-medium">{profile.vehicleNumber}</span>
+                <span className="text-muted-foreground">Status</span>
+                <span className="font-medium">{deliveryPartner.isActive ? 'Active' : 'Inactive'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Joined</span>
-                <span className="font-medium">{profile.joinedDate}</span>
+                <span className="font-medium">{deliveryPartner.joinedAt.toLocaleDateString()}</span>
               </div>
             </div>
           </CardContent>
