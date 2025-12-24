@@ -1,50 +1,56 @@
-import { Package, Clock, MapPin } from 'lucide-react';
+import { Package, Clock, MapPin, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-
-interface ActiveDelivery {
-  orderId: string;
-  status: 'preparing' | 'on_the_way' | 'nearby';
-  eta: number;
-  itemCount: number;
-}
+import { useAuth } from '@/contexts/AuthContext';
+import { subscribeToUserOrders, Order } from '@/lib/firestoreService';
 
 export const DeliveryActionBar = () => {
-  const [activeDelivery, setActiveDelivery] = useState<ActiveDelivery | null>(null);
+  const { user } = useAuth();
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    // Simulated active delivery - in production, this would come from backend
-    const mockDelivery: ActiveDelivery = {
-      orderId: 'ORD-001',
-      status: 'on_the_way',
-      eta: 8,
-      itemCount: 4,
-    };
-    setActiveDelivery(mockDelivery);
-  }, []);
+    if (!user?.uid) {
+      setActiveOrder(null);
+      return;
+    }
 
-  if (!activeDelivery) return null;
+    const unsubscribe = subscribeToUserOrders(user.uid, (orders) => {
+      // Find active orders with status: confirmed, preparing, out_for_delivery, reached_destination
+      const activeStatuses = ['confirmed', 'preparing', 'out_for_delivery', 'reached_destination'];
+      const active = orders.find(order => activeStatuses.includes(order.status));
+      setActiveOrder(active || null);
+    });
 
-  const statusConfig = {
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  if (!activeOrder) return null;
+
+  const statusConfig: Record<string, { icon: typeof Package; text: string; color: string }> = {
+    confirmed: {
+      icon: Package,
+      text: 'Order confirmed',
+      color: 'bg-primary',
+    },
     preparing: {
       icon: Package,
       text: 'Preparing your order',
       color: 'bg-amber-500',
     },
-    on_the_way: {
-      icon: MapPin,
+    out_for_delivery: {
+      icon: Truck,
       text: 'Out for delivery',
       color: 'bg-primary',
     },
-    nearby: {
-      icon: Clock,
-      text: 'Arriving soon!',
+    reached_destination: {
+      icon: MapPin,
+      text: 'Delivery partner arrived!',
       color: 'bg-green-500',
     },
   };
 
-  const config = statusConfig[activeDelivery.status];
+  const config = statusConfig[activeOrder.status] || statusConfig.confirmed;
   const Icon = config.icon;
 
   return (
@@ -59,10 +65,10 @@ export const DeliveryActionBar = () => {
               {config.text}
             </p>
             <p className="text-xs text-primary-foreground/80">
-              {activeDelivery.itemCount} items • ETA {activeDelivery.eta} mins
+              {activeOrder.items.length} items • ₹{activeOrder.total}
             </p>
           </div>
-          <Link to={`/order/${activeDelivery.orderId}`}>
+          <Link to={`/order/${activeOrder.id}`}>
             <Button
               size="sm"
               variant="secondary"

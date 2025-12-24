@@ -976,3 +976,32 @@ export const subscribeToOrder = (
     }
   );
 };
+
+// Subscribe to user's orders in real-time
+export const subscribeToUserOrders = (
+  userId: string,
+  callback: (orders: Order[]) => void,
+  onError?: (error: Error) => void
+): (() => void) => {
+  const q = query(collection(db, 'orders'), where('userId', '==', userId));
+  
+  return onSnapshot(q, 
+    (snapshot) => {
+      const orders = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        } as Order;
+      });
+      // Sort client-side by createdAt descending
+      orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      callback(orders);
+    },
+    (error) => {
+      console.error('Real-time user orders error:', error);
+      onError?.(error);
+    }
+  );
+};
