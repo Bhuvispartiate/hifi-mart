@@ -40,15 +40,15 @@ const App = () => (
                 <Route path="/categories" element={<Categories />} />
                 <Route path="/offers" element={<Offers />} />
                 <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-                <Route path="/account" element={<Account />} />
+                <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
                 <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
                 <Route path="/product/:id" element={<ProductDetail />} />
                 <Route path="/order/:orderId" element={<ProtectedRoute><OrderStatus /></ProtectedRoute>} />
                 <Route path="/profile/settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
                 
-                <Route path="/delivery" element={<DeliveryHome />} />
-                <Route path="/delivery/orders" element={<DeliveryOrders />} />
-                <Route path="/delivery/profile" element={<DeliveryProfile />} />
+                <Route path="/delivery" element={<ProtectedRoute><DeliveryHome /></ProtectedRoute>} />
+                <Route path="/delivery/orders" element={<ProtectedRoute><DeliveryOrders /></ProtectedRoute>} />
+                <Route path="/delivery/profile" element={<ProtectedRoute><DeliveryProfile /></ProtectedRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
