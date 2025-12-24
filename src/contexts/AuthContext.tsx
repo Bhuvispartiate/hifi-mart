@@ -27,12 +27,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Demo OTP for testing when MojoAuth fails
 const DEMO_OTP = '123456';
 
+// Store state ID from MojoAuth for OTP verification
+let pendingStateId: string | null = null;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
-  const mojoAuthRef = useRef<any>(null);
   const pendingPhoneRef = useRef<string | null>(null);
 
   const checkOnboardingStatus = async (): Promise<boolean> => {
@@ -85,34 +87,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pendingPhoneRef.current = phoneNumber;
 
     try {
-      console.log('[MojoAuth] Initializing with API Key:', MOJOAUTH_API_KEY);
       console.log('[MojoAuth] Sending OTP to:', phoneNumber);
+      console.log('[MojoAuth] Using API Key:', MOJOAUTH_API_KEY);
       
-      // Dynamically import MojoAuth SDK
-      const MojoAuth = (await import('mojoauth-web-sdk')).default;
-      console.log('[MojoAuth] SDK loaded successfully');
-      
-      const config = {
-        language: 'en',
-        source: [{ type: 'phone' as const, feature: 'otp' as const }],
-      };
-      console.log('[MojoAuth] Config:', JSON.stringify(config));
+      // Use MojoAuth REST API to send OTP
+      const response = await fetch('https://api.mojoauth.com/users/phone', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': MOJOAUTH_API_KEY,
+        },
+        body: JSON.stringify({
+          phone: phoneNumber,
+        }),
+      });
 
-      mojoAuthRef.current = new MojoAuth(MOJOAUTH_API_KEY, config);
-      console.log('[MojoAuth] Instance created');
-      
-      // Send OTP using MojoAuth
-      const otpResponse = await mojoAuthRef.current.signInWithPhone(phoneNumber);
-      console.log('[MojoAuth] OTP Send Response:', JSON.stringify(otpResponse, null, 2));
-      
-      setIsDemoMode(false);
-      return { success: true };
+      console.log('[MojoAuth] Response status:', response.status);
+      const data = await response.json();
+      console.log('[MojoAuth] Response data:', JSON.stringify(data, null, 2));
+
+      if (response.ok && data.state_id) {
+        pendingStateId = data.state_id;
+        console.log('[MojoAuth] OTP sent successfully, state_id:', data.state_id);
+        setIsDemoMode(false);
+        return { success: true };
+      } else {
+        console.error('[MojoAuth] API Error:', data);
+        // Fall back to demo mode
+        console.log('[MojoAuth] Falling back to demo mode. Use OTP: 123456');
+        setIsDemoMode(true);
+        return { success: true };
+      }
     } catch (error: any) {
       console.error('[MojoAuth] ❌ sendOTP ERROR:', error);
-      console.error('[MojoAuth] Error name:', error?.name);
       console.error('[MojoAuth] Error message:', error?.message);
-      console.error('[MojoAuth] Error stack:', error?.stack);
-      console.error('[MojoAuth] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       
       // Fall back to demo mode if MojoAuth fails
       console.log('[MojoAuth] Falling back to demo mode. Use OTP: 123456');
@@ -133,35 +141,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(demoUser);
         localStorage.setItem('grocery_auth_user', JSON.stringify(demoUser));
         pendingPhoneRef.current = null;
+        pendingStateId = null;
         return { success: true };
       }
       return { success: false, error: 'Invalid OTP. Use 123456' };
     }
 
     try {
-      // Verify OTP using MojoAuth
-      if (!mojoAuthRef.current) {
-        throw new Error('MojoAuth not initialized');
+      console.log('[MojoAuth] Verifying OTP:', otp);
+      console.log('[MojoAuth] State ID:', pendingStateId);
+      
+      if (!pendingStateId) {
+        throw new Error('No pending verification. Please request OTP again.');
       }
 
-      const response = await mojoAuthRef.current.verifyOTP(otp, phoneNumber);
-      
-      if (response && response.authenticated) {
+      // Use MojoAuth REST API to verify OTP
+      const response = await fetch('https://api.mojoauth.com/users/phone/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': MOJOAUTH_API_KEY,
+        },
+        body: JSON.stringify({
+          state_id: pendingStateId,
+          otp: otp,
+        }),
+      });
+
+      console.log('[MojoAuth] Verify response status:', response.status);
+      const data = await response.json();
+      console.log('[MojoAuth] Verify response data:', JSON.stringify(data, null, 2));
+
+      if (response.ok && data.authenticated) {
         const authUser: AuthUser = {
-          uid: response.user?.user_id || 'mojo-user-' + Date.now(),
+          uid: data.user?.user_id || 'mojo-user-' + Date.now(),
           phoneNumber: phoneNumber || pendingPhoneRef.current || '',
           displayName: 'User',
-          accessToken: response.oauth?.access_token,
+          accessToken: data.oauth?.access_token,
         };
         setUser(authUser);
         localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
         pendingPhoneRef.current = null;
+        pendingStateId = null;
         return { success: true };
       }
 
-      return { success: false, error: 'Verification failed. Please try again.' };
+      return { success: false, error: data.message || 'Verification failed. Please try again.' };
     } catch (error: any) {
-      console.error('MojoAuth verifyOTP error:', error);
+      console.error('[MojoAuth] ❌ verifyOTP ERROR:', error);
+      console.error('[MojoAuth] Error message:', error?.message);
       
       // If MojoAuth verification fails, try demo OTP as fallback
       if (otp === DEMO_OTP) {
@@ -173,6 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(demoUser);
         localStorage.setItem('grocery_auth_user', JSON.stringify(demoUser));
         pendingPhoneRef.current = null;
+        pendingStateId = null;
         setIsDemoMode(true);
         return { success: true };
       }
@@ -198,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsDemoMode(false);
     localStorage.removeItem('grocery_auth_user');
     pendingPhoneRef.current = null;
-    mojoAuthRef.current = null;
+    pendingStateId = null;
   };
 
   return (
