@@ -88,15 +88,16 @@ export default function DeliveryHome() {
     const unsubscribe = subscribeToAllOrders((allOrders) => {
       setOrders(allOrders);
       
-      // Find order assigned to this specific delivery partner
-      const assignedOrder = allOrders.find(o => 
+      // Find order assigned to this specific delivery partner that is "Out For Delivery"
+      const activeOrder = allOrders.find(o => 
         o.status === 'out_for_delivery' && 
         o.deliveryPartner?.id === deliveryPartner?.id
       );
       
-      if (assignedOrder && !currentOrder) {
-        setCurrentOrder(assignedOrder);
-        setStatus('assigned');
+      // If there's an active order with "out_for_delivery" status, go directly to navigating
+      if (activeOrder && !currentOrder) {
+        setCurrentOrder(activeOrder);
+        setStatus('navigating'); // Directly show "Navigating to Customer"
       }
       
       // Update current order if it exists
