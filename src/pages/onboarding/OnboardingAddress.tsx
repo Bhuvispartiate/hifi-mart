@@ -20,10 +20,10 @@ const addressTypes = [
 
 const OnboardingAddress = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setOnboardingCompletedLocal } = useAuth();
   const { location, refreshLocation, isLoading: locationLoading } = useLocation();
   const { toast } = useToast();
-  
+
   const [addressType, setAddressType] = useState<AddressType>('home');
   const [addressLine, setAddressLine] = useState('');
   const [landmark, setLandmark] = useState('');
@@ -82,15 +82,11 @@ const OnboardingAddress = () => {
       const email = sessionStorage.getItem('onboarding_email') || '';
       const verifiedPhone = sessionStorage.getItem('onboarding_phone') || user.phoneNumber;
 
-      const fullAddress = [
-        addressLine.trim(),
-        landmark.trim(),
-        selectedLocation.address,
-      ].filter(Boolean).join(', ');
+      const fullAddress = [addressLine.trim(), landmark.trim(), selectedLocation.address].filter(Boolean).join(', ');
 
       const addressData = {
         id: `addr-${Date.now()}`,
-        label: addressTypes.find(t => t.id === addressType)?.label || 'Home',
+        label: addressTypes.find((t) => t.id === addressType)?.label || 'Home',
         address: fullAddress,
         lat: selectedLocation.lat,
         lng: selectedLocation.lng,
@@ -118,7 +114,7 @@ const OnboardingAddress = () => {
 
       // Check if profile exists
       const existingProfile = await getUserProfile(user.uid);
-      
+
       if (existingProfile) {
         // Update existing profile
         const { updateUserProfile } = await import('@/lib/firestoreService');
@@ -127,6 +123,9 @@ const OnboardingAddress = () => {
         // Create new profile
         await createUserProfile(user.uid, profileData);
       }
+
+      // Update local auth state so protected routes allow navigation immediately
+      setOnboardingCompletedLocal(true);
 
       // Clear session storage
       sessionStorage.removeItem('onboarding_name');
@@ -156,11 +155,7 @@ const OnboardingAddress = () => {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card border-b border-border px-4 py-4">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/onboarding/profile')}
-          >
+          <Button variant="ghost" size="icon" onClick={() => navigate('/onboarding/profile')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -182,7 +177,7 @@ const OnboardingAddress = () => {
         {/* Location Selection */}
         <div className="space-y-3">
           <Label>Delivery Location</Label>
-          
+
           <Button
             variant="outline"
             className="w-full justify-start h-auto py-3 gap-3"
@@ -262,11 +257,7 @@ const OnboardingAddress = () => {
 
       {/* Footer */}
       <div className="p-6">
-        <Button 
-          className="w-full h-12 text-base"
-          onClick={handleComplete}
-          disabled={loading || !selectedLocation || !addressLine.trim()}
-        >
+        <Button className="w-full h-12 text-base" onClick={handleComplete} disabled={loading || !selectedLocation || !addressLine.trim()}>
           {loading ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin mr-2" />

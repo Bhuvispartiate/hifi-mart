@@ -17,6 +17,7 @@ interface AuthContextType {
   demoLogin: () => void;
   logout: () => Promise<void>;
   checkOnboardingStatus: () => Promise<boolean>;
+  setOnboardingCompletedLocal: (completed: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkOnboardingStatus = async (): Promise<boolean> => {
     if (!user) return false;
-    
+
     try {
       const profile = await getUserProfile(user.uid);
       const completed = profile?.onboardingCompleted ?? false;
@@ -45,6 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error checking onboarding status:', error);
       return false;
     }
+  };
+
+  const setOnboardingCompletedLocal = (completed: boolean) => {
+    setOnboardingCompleted(completed);
   };
 
   useEffect(() => {
@@ -75,13 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!phoneNumber || phoneNumber.length < 10) {
       return { success: false, error: 'Please enter a valid phone number' };
     }
-    
+
     // Store phone number for verification step
     pendingPhoneNumber = phoneNumber;
-    
+
     // Simulate OTP send delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     return { success: true };
   };
 
@@ -120,17 +125,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading, 
-      isDemoMode, 
-      onboardingCompleted,
-      sendOTP, 
-      verifyOTP, 
-      demoLogin, 
-      logout,
-      checkOnboardingStatus,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        isDemoMode,
+        onboardingCompleted,
+        sendOTP,
+        verifyOTP,
+        demoLogin,
+        logout,
+        checkOnboardingStatus,
+        setOnboardingCompletedLocal,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
