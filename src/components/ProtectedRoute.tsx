@@ -9,11 +9,19 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, requireOnboarding = true }: ProtectedRouteProps) => {
+  // TESTING MODE: Bypass all authentication checks
+  const TESTING_MODE = true;
+
   const { user, loading, onboardingCompleted } = useAuth();
   const location = useLocation();
 
   // Check if current path is an onboarding route
   const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+
+  // If testing mode is enabled, skip all auth checks
+  if (TESTING_MODE) {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return (
