@@ -1,64 +1,66 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Package, Store, Clock, CheckCircle2, Navigation, Phone, X } from 'lucide-react';
+import { MapPin, Package, Store, Clock, CheckCircle2, Navigation, Phone, X, KeyRound, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { DeliveryBottomNav } from '@/components/delivery/DeliveryBottomNav';
 import { useNavigate } from 'react-router-dom';
+import { toast } from '@/hooks/use-toast';
+import { 
+  Order, 
+  subscribeToAllOrders, 
+  updateOrderStatus,
+  verifyDeliveryOtp
+} from '@/lib/firestoreService';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-type DeliveryStatus = 'waiting' | 'assigned' | 'pickup' | 'navigating';
-
-interface AssignedOrder {
-  id: string;
-  shopName: string;
-  shopAddress: string;
-  customerName: string;
-  customerAddress: string;
-  customerPhone: string;
-  itemCount: number;
-  totalAmount: number;
-  estimatedDistance: string;
-  estimatedEarning: number;
-  shopCoords: { lat: number; lng: number };
-  deliveryCoords: { lat: number; lng: number };
-}
+type DeliveryStatus = 'waiting' | 'assigned' | 'pickup' | 'navigating' | 'reached';
 
 export default function DeliveryHome() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<DeliveryStatus>('waiting');
-  const [order, setOrder] = useState<AssignedOrder | null>(null);
+  const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [otpInput, setOtpInput] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
 
-  // Simulate order assignment after 5 seconds for demo
+  // Subscribe to real-time orders
   useEffect(() => {
-    if (status === 'waiting') {
-      const timer = setTimeout(() => {
-        setOrder({
-          id: 'ORD-2024-001',
-          shopName: 'Fresh Mart Grocery',
-          shopAddress: '123 Market Street, Sector 15',
-          customerName: 'Rahul Kumar',
-          customerAddress: '456 Green Avenue, Sector 22',
-          customerPhone: '+91 98765 43210',
-          itemCount: 8,
-          totalAmount: 547,
-          estimatedDistance: '3.2 km',
-          estimatedEarning: 45,
-          shopCoords: { lat: 12.9716, lng: 77.5946 },
-          deliveryCoords: { lat: 12.9784, lng: 77.6408 },
-        });
+    const unsubscribe = subscribeToAllOrders((allOrders) => {
+      setOrders(allOrders);
+      
+      // Find order assigned to this delivery partner (for demo, we'll pick confirmed/preparing orders)
+      const assignedOrder = allOrders.find(o => 
+        o.status === 'out_for_delivery' && o.deliveryPartner
+      );
+      
+      if (assignedOrder && !currentOrder) {
+        setCurrentOrder(assignedOrder);
         setStatus('assigned');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [status]);
+      }
+      
+      // Update current order if it exists
+      if (currentOrder) {
+        const updatedOrder = allOrders.find(o => o.id === currentOrder.id);
+        if (updatedOrder) {
+          setCurrentOrder(updatedOrder);
+          if (updatedOrder.status === 'reached_destination') {
+            setStatus('reached');
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentOrder?.id]);
 
   // Initialize map when navigating
   useEffect(() => {
-    if (status !== 'navigating' || !mapContainer.current || !order) return;
+    if (status !== 'navigating' || !mapContainer.current || !currentOrder?.deliveryCoordinates) return;
 
     mapboxgl.accessToken = 'pk.eyJ1IjoibG92YWJsZSIsImEiOiJjbHNxcXBiNGkwMmt4MmtvOXRtY3d4M2RlIn0.v1fT8IOkVRnKPzKlQUL_Eg';
 
@@ -68,18 +70,21 @@ export default function DeliveryHome() {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
-        initializeMap(currentPos, order.deliveryCoords);
+        initializeMap(currentPos, currentOrder.deliveryCoordinates!);
       },
       () => {
-        // Fallback to shop coords if geolocation fails
-        initializeMap(order.shopCoords, order.deliveryCoords);
+        // Fallback if geolocation fails
+        initializeMap(
+          { lat: 12.9716, lng: 77.5946 }, 
+          currentOrder.deliveryCoordinates!
+        );
       }
     );
 
     return () => {
       map.current?.remove();
     };
-  }, [status, order]);
+  }, [status, currentOrder]);
 
   const initializeMap = (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
     if (!mapContainer.current) return;
@@ -92,17 +97,14 @@ export default function DeliveryHome() {
       pitch: 45,
     });
 
-    // Add current location marker
     new mapboxgl.Marker({ color: '#3B82F6' })
       .setLngLat([start.lng, start.lat])
       .addTo(map.current);
 
-    // Add destination marker
     new mapboxgl.Marker({ color: '#22C55E' })
       .setLngLat([end.lng, end.lat])
       .addTo(map.current);
 
-    // Add navigation controls
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
     map.current.addControl(
       new mapboxgl.GeolocateControl({
@@ -113,7 +115,6 @@ export default function DeliveryHome() {
       'top-right'
     );
 
-    // Fetch and display route
     fetchRoute(start, end);
   };
 
@@ -156,7 +157,6 @@ export default function DeliveryHome() {
             },
           });
 
-          // Fit map to show entire route
           const coordinates = route.coordinates;
           const bounds = new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]);
           for (const coord of coordinates) {
@@ -176,7 +176,7 @@ export default function DeliveryHome() {
     }
   };
 
-  const handleAcceptOrder = () => {
+  const handleAcceptOrder = async () => {
     setStatus('pickup');
   };
 
@@ -184,10 +184,38 @@ export default function DeliveryHome() {
     setStatus('navigating');
   };
 
-  const handleDeliveryComplete = () => {
-    navigate('/delivery/orders');
-    setStatus('waiting');
-    setOrder(null);
+  const handleReachedDestination = async () => {
+    if (!currentOrder) return;
+    
+    try {
+      await updateOrderStatus(currentOrder.id, 'reached_destination');
+      setStatus('reached');
+      toast({ title: 'Customer has been notified', description: 'Wait for OTP verification' });
+    } catch (error) {
+      toast({ title: 'Error updating status', variant: 'destructive' });
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!currentOrder || !otpInput) return;
+    
+    setVerifying(true);
+    try {
+      const success = await verifyDeliveryOtp(currentOrder.id, otpInput);
+      
+      if (success) {
+        toast({ title: 'Delivery completed!', description: 'OTP verified successfully' });
+        setStatus('waiting');
+        setCurrentOrder(null);
+        setOtpInput('');
+        navigate('/delivery/orders');
+      } else {
+        toast({ title: 'Invalid OTP', description: 'Please check and try again', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Verification failed', variant: 'destructive' });
+    }
+    setVerifying(false);
   };
 
   const handleEndNavigation = () => {
@@ -196,17 +224,16 @@ export default function DeliveryHome() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {status === 'navigating' && order ? (
+      {status === 'navigating' && currentOrder ? (
         // Full screen navigation mode
         <div className="fixed inset-0 z-50 bg-background">
           <div ref={mapContainer} className="w-full h-full" />
           
-          {/* Navigation overlay */}
           <div className="absolute top-4 left-4 right-4 z-10">
             <Card className="bg-background/95 backdrop-blur-sm">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <Badge variant="secondary" className="bg-green-500/20 text-green-600">
+                  <Badge variant="secondary" className="bg-success/20 text-success">
                     <Navigation className="w-3 h-3 mr-1" />
                     Navigating to Customer
                   </Badge>
@@ -214,36 +241,93 @@ export default function DeliveryHome() {
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
-                <p className="text-sm font-medium">{order.customerAddress}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Delivering to {order.customerName}
-                </p>
+                <p className="text-sm font-medium">{currentOrder.deliveryAddress}</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Bottom action */}
           <div className="absolute bottom-6 left-4 right-4 z-10">
             <Card className="bg-background/95 backdrop-blur-sm">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="flex-1">
-                    <p className="font-medium">{order.customerName}</p>
-                    <p className="text-sm text-muted-foreground">{order.itemCount} items • ₹{order.totalAmount}</p>
+                    <p className="font-medium">{currentOrder.items.length} items</p>
+                    <p className="text-sm text-muted-foreground">₹{currentOrder.total}</p>
                   </div>
-                  <Button variant="outline" size="icon" asChild>
-                    <a href={`tel:${order.customerPhone}`}>
-                      <Phone className="w-4 h-4" />
-                    </a>
-                  </Button>
+                  {currentOrder.deliveryPartner?.phone && (
+                    <Button variant="outline" size="icon" asChild>
+                      <a href={`tel:${currentOrder.deliveryPartner.phone}`}>
+                        <Phone className="w-4 h-4" />
+                      </a>
+                    </Button>
+                  )}
                 </div>
-                <Button className="w-full" size="lg" onClick={handleDeliveryComplete}>
-                  <CheckCircle2 className="w-5 h-5 mr-2" />
-                  Mark as Delivered
+                <Button className="w-full" size="lg" onClick={handleReachedDestination}>
+                  <MapPin className="w-5 h-5 mr-2" />
+                  I've Reached Destination
                 </Button>
               </CardContent>
             </Card>
           </div>
+        </div>
+      ) : status === 'reached' && currentOrder ? (
+        // OTP Verification Mode
+        <div className="min-h-screen bg-background">
+          <div className="bg-primary text-primary-foreground p-4 pt-12">
+            <h1 className="text-xl font-bold">Verify Delivery</h1>
+            <p className="text-sm opacity-90">Enter OTP from customer</p>
+          </div>
+
+          <div className="p-4 space-y-4">
+            <Card className="border-primary border-2">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                    <KeyRound className="w-7 h-7 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-lg">Enter Customer OTP</p>
+                    <p className="text-sm text-muted-foreground">Ask the customer for 4-digit code</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={otpInput}
+                    onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter 4-digit OTP"
+                    className="text-center text-2xl tracking-widest h-14"
+                  />
+                  
+                  <Button 
+                    className="w-full" 
+                    size="lg" 
+                    onClick={handleVerifyOtp}
+                    disabled={otpInput.length !== 4 || verifying}
+                  >
+                    {verifying && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                    <CheckCircle2 className="w-5 h-5 mr-2" />
+                    Verify & Complete Delivery
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground mb-2">Delivering to:</p>
+                <p className="font-medium">{currentOrder.deliveryAddress}</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {currentOrder.items.length} items • ₹{currentOrder.total}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <DeliveryBottomNav />
         </div>
       ) : (
         <>
@@ -281,13 +365,16 @@ export default function DeliveryHome() {
             )}
 
             {/* Order Assigned State */}
-            {status === 'assigned' && order && (
+            {status === 'assigned' && currentOrder && (
               <div className="space-y-4">
                 <Card className="border-primary border-2 bg-secondary/30">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Package className="w-5 h-5 text-primary" />
                       <span className="font-semibold text-primary">New Order Assigned!</span>
+                      <Badge variant="secondary" className="ml-auto">
+                        #{currentOrder.id.slice(0, 8).toUpperCase()}
+                      </Badge>
                     </div>
                     
                     <div className="space-y-3">
@@ -296,8 +383,8 @@ export default function DeliveryHome() {
                           <Store className="w-4 h-4 text-primary" />
                         </div>
                         <div>
-                          <p className="font-medium">{order.shopName}</p>
-                          <p className="text-sm text-muted-foreground">{order.shopAddress}</p>
+                          <p className="font-medium">Store Pickup</p>
+                          <p className="text-sm text-muted-foreground">Collect items from store</p>
                         </div>
                       </div>
                       
@@ -308,20 +395,20 @@ export default function DeliveryHome() {
                           <MapPin className="w-4 h-4 text-accent" />
                         </div>
                         <div>
-                          <p className="font-medium">{order.customerName}</p>
-                          <p className="text-sm text-muted-foreground">{order.customerAddress}</p>
+                          <p className="font-medium">Customer Location</p>
+                          <p className="text-sm text-muted-foreground">{currentOrder.deliveryAddress}</p>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Distance: </span>
-                        <span className="font-medium">{order.estimatedDistance}</span>
+                        <span className="text-muted-foreground">Items: </span>
+                        <span className="font-medium">{currentOrder.items.length}</span>
                       </div>
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Earning: </span>
-                        <span className="font-medium text-primary">₹{order.estimatedEarning}</span>
+                        <span className="text-muted-foreground">Total: </span>
+                        <span className="font-medium text-primary">₹{currentOrder.total}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -333,7 +420,7 @@ export default function DeliveryHome() {
                     className="flex-1"
                     onClick={() => {
                       setStatus('waiting');
-                      setOrder(null);
+                      setCurrentOrder(null);
                     }}
                   >
                     Reject
@@ -346,7 +433,7 @@ export default function DeliveryHome() {
             )}
 
             {/* Pickup from Shop State */}
-            {status === 'pickup' && order && (
+            {status === 'pickup' && currentOrder && (
               <div className="space-y-4">
                 <Card>
                   <CardContent className="p-4">
@@ -354,7 +441,7 @@ export default function DeliveryHome() {
                       <CheckCircle2 className="w-5 h-5 text-primary" />
                       <span className="font-semibold">Order Accepted</span>
                       <Badge variant="secondary" className="ml-auto">
-                        {order.id}
+                        #{currentOrder.id.slice(0, 8).toUpperCase()}
                       </Badge>
                     </div>
 
@@ -363,22 +450,18 @@ export default function DeliveryHome() {
                         <Store className="w-5 h-5 text-primary" />
                         <span className="font-semibold">Pickup Location</span>
                       </div>
-                      <p className="font-medium">{order.shopName}</p>
-                      <p className="text-sm text-muted-foreground">{order.shopAddress}</p>
+                      <p className="font-medium">Store</p>
+                      <p className="text-sm text-muted-foreground">Collect all items</p>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Items to pickup</span>
-                        <span className="font-medium">{order.itemCount} items</span>
+                        <span className="font-medium">{currentOrder.items.length} items</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Order Value</span>
-                        <span className="font-medium">₹{order.totalAmount}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Your Earning</span>
-                        <span className="font-medium text-primary">₹{order.estimatedEarning}</span>
+                        <span className="font-medium">₹{currentOrder.total}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -390,14 +473,13 @@ export default function DeliveryHome() {
                       <MapPin className="w-5 h-5 text-accent" />
                       <span className="font-semibold">Delivery Location</span>
                     </div>
-                    <p className="font-medium">{order.customerName}</p>
-                    <p className="text-sm text-muted-foreground">{order.customerAddress}</p>
+                    <p className="text-sm text-muted-foreground">{currentOrder.deliveryAddress}</p>
                   </CardContent>
                 </Card>
 
                 <Button className="w-full" size="lg" onClick={handlePickupComplete}>
                   <CheckCircle2 className="w-5 h-5 mr-2" />
-                  Mark as Picked Up
+                  Mark as Picked Up & Navigate
                 </Button>
               </div>
             )}

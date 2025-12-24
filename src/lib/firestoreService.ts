@@ -83,7 +83,7 @@ export interface Order {
   id: string;
   userId: string;
   date: string;
-  status: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'reached_destination' | 'delivered' | 'cancelled';
   total: number;
   items: OrderItem[];
   deliveryAddress: string;
@@ -92,10 +92,12 @@ export interface Order {
     lng: number;
   };
   deliveryPartner?: {
+    id: string;
     name: string;
     phone: string;
     rating: number;
   };
+  deliveryPartnerId?: string;
   timeline: {
     status: string;
     time: string;
@@ -105,6 +107,8 @@ export interface Order {
   deliveredAt?: string;
   cancelledReason?: string;
   createdAt: Date;
+  deliveryOtp?: string;
+  otpGeneratedAt?: Date;
 }
 
 export interface UserAddress {
@@ -570,6 +574,8 @@ export interface DeliveryPartner {
   rating: number;
   totalDeliveries: number;
   joinedAt: Date;
+  lastDeliveryAt?: Date;
+  currentOrderId?: string;
 }
 
 export const getDeliveryPartners = async (): Promise<DeliveryPartner[]> => {
@@ -620,6 +626,126 @@ export const deleteDeliveryPartner = async (id: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error deleting delivery partner:', error);
+    return false;
+  }
+};
+
+// Get available delivery partner with oldest last delivery (for fair assignment)
+export const getAvailableDeliveryPartner = async (): Promise<DeliveryPartner | null> => {
+  try {
+    const partners = await getDeliveryPartners();
+    
+    // Filter active partners who don't have a current order
+    const availablePartners = partners.filter(p => p.isActive && !p.currentOrderId);
+    
+    if (availablePartners.length === 0) return null;
+    
+    // Sort by lastDeliveryAt (oldest first, or partners with no delivery history first)
+    availablePartners.sort((a, b) => {
+      if (!a.lastDeliveryAt) return -1;
+      if (!b.lastDeliveryAt) return 1;
+      return a.lastDeliveryAt.getTime() - b.lastDeliveryAt.getTime();
+    });
+    
+    return availablePartners[0];
+  } catch (error) {
+    console.error('Error getting available delivery partner:', error);
+    return null;
+  }
+};
+
+// Auto-assign order to delivery partner
+export const autoAssignDeliveryPartner = async (orderId: string): Promise<DeliveryPartner | null> => {
+  try {
+    const partner = await getAvailableDeliveryPartner();
+    if (!partner) {
+      console.log('No available delivery partner for order:', orderId);
+      return null;
+    }
+
+    // Update order with delivery partner info
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+      deliveryPartnerId: partner.id,
+      deliveryPartner: {
+        id: partner.id,
+        name: partner.name,
+        phone: partner.phone,
+        rating: partner.rating,
+      },
+    });
+
+    // Update partner with current order
+    const partnerRef = doc(db, 'deliveryPartners', partner.id);
+    await updateDoc(partnerRef, {
+      currentOrderId: orderId,
+    });
+
+    console.log(`Order ${orderId} assigned to delivery partner ${partner.name}`);
+    return partner;
+  } catch (error) {
+    console.error('Error auto-assigning delivery partner:', error);
+    return null;
+  }
+};
+
+// Generate 4-digit OTP for delivery verification
+export const generateDeliveryOtp = (): string => {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+};
+
+// Set delivery OTP when reaching destination
+export const setDeliveryOtp = async (orderId: string): Promise<string | null> => {
+  try {
+    const otp = generateDeliveryOtp();
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+      deliveryOtp: otp,
+      otpGeneratedAt: Timestamp.now(),
+    });
+    return otp;
+  } catch (error) {
+    console.error('Error setting delivery OTP:', error);
+    return null;
+  }
+};
+
+// Verify OTP and mark as delivered
+export const verifyDeliveryOtp = async (orderId: string, enteredOtp: string): Promise<boolean> => {
+  try {
+    const order = await getOrderById(orderId);
+    if (!order || !order.deliveryOtp) return false;
+
+    if (order.deliveryOtp !== enteredOtp) {
+      console.log('OTP mismatch for order:', orderId);
+      return false;
+    }
+
+    // OTP verified - mark as delivered
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+      status: 'delivered',
+      deliveredAt: new Date().toISOString(),
+      deliveryOtp: null, // Clear OTP after use
+    });
+
+    // Update delivery partner stats
+    if (order.deliveryPartnerId) {
+      const partnerRef = doc(db, 'deliveryPartners', order.deliveryPartnerId);
+      const partnerSnap = await getDoc(partnerRef);
+      if (partnerSnap.exists()) {
+        const partnerData = partnerSnap.data();
+        await updateDoc(partnerRef, {
+          totalDeliveries: (partnerData.totalDeliveries || 0) + 1,
+          lastDeliveryAt: Timestamp.now(),
+          currentOrderId: null, // Free up the partner
+        });
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error verifying delivery OTP:', error);
     return false;
   }
 };
