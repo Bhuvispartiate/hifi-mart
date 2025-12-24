@@ -19,6 +19,34 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 type DeliveryStatus = 'waiting' | 'assigned' | 'pickup' | 'navigating' | 'reached';
 
+type LineStringGeometry = { type: 'LineString'; coordinates: number[][] };
+
+type RouteOption = {
+  duration: number; // seconds
+  distance: number; // meters
+  geometry: LineStringGeometry;
+};
+
+const ROUTE_SOURCE_ID = 'route-selected';
+const ALT_ROUTE_SOURCE_ID = 'route-alternatives';
+const ROUTE_LAYER_ID = 'route-selected-layer';
+const ALT_ROUTE_LAYER_ID = 'route-alt-layer';
+
+const formatDuration = (seconds: number) => {
+  const mins = Math.max(0, Math.round(seconds / 60));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0) return `${h} hr ${m} min`;
+  return `${mins} min`;
+};
+
+const formatDistance = (meters: number) => {
+  if (!Number.isFinite(meters)) return '';
+  const km = meters / 1000;
+  if (km >= 1) return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+  return `${Math.round(meters)} m`;
+};
+
 export default function DeliveryHome() {
   const navigate = useNavigate();
   const { deliveryPartner } = useDeliveryAuth();
