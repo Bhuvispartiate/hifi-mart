@@ -6,17 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { ShoppingBag, Phone, ArrowLeft, Sparkles, MessageCircle } from 'lucide-react';
+import { ShoppingBag, Phone, ArrowLeft, Sparkles } from 'lucide-react';
 
-type AuthStep = 'choose' | 'phone' | 'otp';
+type AuthStep = 'phone' | 'otp';
 
 const Auth = () => {
-  const [step, setStep] = useState<AuthStep>('choose');
+  const [step, setStep] = useState<AuthStep>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [fullPhoneNumber, setFullPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const { user, sendOTP, verifyOTP, demoLogin, isDemoMode, onboardingCompleted, initWhatsAppAuth } = useAuth();
+  const { user, sendOTP, verifyOTP, demoLogin, isDemoMode, onboardingCompleted } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
@@ -25,44 +25,20 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
+      // Check if onboarding is completed
       if (onboardingCompleted === false) {
         navigate('/onboarding', { replace: true });
       } else if (onboardingCompleted === true) {
         navigate(returnUrl, { replace: true });
       }
+      // If onboardingCompleted is null, we're still checking - wait
     }
   }, [user, onboardingCompleted, navigate, returnUrl]);
 
   const formatPhoneNumber = (value: string) => {
+    // Remove all non-digits
     const digits = value.replace(/\D/g, '');
     return digits.slice(0, 10);
-  };
-
-  const handleWhatsAppLogin = async () => {
-    setLoading(true);
-    const result = await initWhatsAppAuth();
-    setLoading(false);
-
-    if (result.success) {
-      if (isDemoMode) {
-        setStep('phone');
-        toast({
-          title: 'WhatsApp not configured',
-          description: 'Please use phone OTP or demo login',
-        });
-      } else {
-        toast({
-          title: 'WhatsApp Login',
-          description: 'Please complete authentication in the popup',
-        });
-      }
-    } else {
-      toast({
-        title: 'WhatsApp Login Failed',
-        description: result.error,
-        variant: 'destructive',
-      });
-    }
   };
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
@@ -136,16 +112,6 @@ const Auth = () => {
     navigate(returnUrl, { replace: true });
   };
 
-  const goBack = () => {
-    if (step === 'otp') {
-      setStep('phone');
-      setOtp('');
-    } else if (step === 'phone') {
-      setStep('choose');
-      setPhoneNumber('');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background flex flex-col items-center justify-center p-4">
       
@@ -161,83 +127,32 @@ const Auth = () => {
       </div>
 
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center relative">
-          {step !== 'choose' && (
+        <CardHeader className="text-center">
+          {step === 'otp' && (
             <Button
               variant="ghost"
               size="icon"
               className="absolute left-4 top-4"
-              onClick={goBack}
+              onClick={() => {
+                setStep('phone');
+                setOtp('');
+              }}
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
           <CardTitle className="text-xl">
-            {step === 'choose' ? 'Login or Sign Up' : step === 'phone' ? 'Enter Phone Number' : 'Verify OTP'}
+            {step === 'phone' ? 'Login or Sign Up' : 'Verify OTP'}
           </CardTitle>
           <CardDescription>
-            {step === 'choose'
-              ? 'Choose how you want to continue'
-              : step === 'phone'
+            {step === 'phone'
               ? 'Enter your mobile number to continue'
               : `We've sent a code to +91 ${phoneNumber}`}
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          {step === 'choose' && (
-            <>
-              {/* WhatsApp Login - Primary Option */}
-              <Button
-                className="w-full gap-2 bg-[#25D366] hover:bg-[#128C7E] text-white h-12"
-                onClick={handleWhatsAppLogin}
-                disabled={loading}
-              >
-                <MessageCircle className="h-5 w-5" />
-                {loading ? 'Connecting...' : 'Continue with WhatsApp'}
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-
-              {/* Phone OTP Option */}
-              <Button
-                variant="outline"
-                className="w-full gap-2 h-12"
-                onClick={() => setStep('phone')}
-              >
-                <Phone className="h-5 w-5" />
-                Continue with Phone OTP
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-
-              {/* Demo Login */}
-              <Button
-                variant="ghost"
-                className="w-full gap-2"
-                onClick={handleDemoLogin}
-              >
-                <Sparkles className="h-4 w-4" />
-                Quick Demo Login
-              </Button>
-            </>
-          )}
-
-          {step === 'phone' && (
+        <CardContent className="space-y-6">
+          {step === 'phone' ? (
             <form onSubmit={handlePhoneSubmit} className="space-y-4">
               <div className="flex gap-2">
                 <div className="flex items-center justify-center px-3 bg-muted rounded-md border border-input">
@@ -260,9 +175,7 @@ const Auth = () => {
                 {loading ? 'Sending OTP...' : 'Continue'}
               </Button>
             </form>
-          )}
-
-          {step === 'otp' && (
+          ) : (
             <form onSubmit={handleOTPSubmit} className="space-y-4">
               <div className="flex justify-center">
                 <InputOTP
@@ -305,7 +218,25 @@ const Auth = () => {
             </form>
           )}
 
-          <p className="text-xs text-center text-muted-foreground pt-2">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or</span>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={handleDemoLogin}
+          >
+            <Sparkles className="h-4 w-4" />
+            Quick Demo Login
+          </Button>
+
+          <p className="text-xs text-center text-muted-foreground">
             By continuing, you agree to our Terms of Service and Privacy Policy
           </p>
         </CardContent>
