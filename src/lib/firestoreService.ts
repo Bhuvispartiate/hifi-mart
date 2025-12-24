@@ -33,33 +33,6 @@ export interface Product {
   description?: string;
   nutritionInfo?: string;
   shelfLife?: string;
-  barcode?: string;
-}
-
-// Get product by barcode
-export const getProductByBarcode = async (barcode: string): Promise<Product | null> => {
-  try {
-    const q = query(collection(db, 'products'), where('barcode', '==', barcode));
-    const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
-      return { id: doc.id, ...doc.data() } as Product;
-    }
-    
-    // Also try finding by product ID directly
-    const docRef = doc(db, 'products', barcode);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() } as Product;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error getting product by barcode:', error);
-    return null;
-  }
 }
 
 export interface Category {
