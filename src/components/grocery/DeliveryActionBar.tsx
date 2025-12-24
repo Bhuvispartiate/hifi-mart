@@ -1,12 +1,13 @@
 import { Package, Clock, MapPin, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect, useContext } from 'react';
 import { subscribeToUserOrders, Order } from '@/lib/firestoreService';
+import { AuthContext } from '@/contexts/AuthContext';
 
 export const DeliveryActionBar = () => {
-  const { user } = useAuth();
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user ?? null;
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
 
   useEffect(() => {

@@ -20,7 +20,7 @@ interface AuthContextType {
   setOnboardingCompletedLocal: (completed: boolean) => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Demo OTP for testing
 const DEMO_OTP = '123456';
