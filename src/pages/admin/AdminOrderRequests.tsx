@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { useBrowserNotification } from '@/hooks/useBrowserNotification';
 import { 
   CheckCircle, 
   XCircle, 
@@ -15,7 +16,8 @@ import {
   User,
   ShoppingBag,
   Volume2,
-  VolumeX
+  VolumeX,
+  Bell
 } from 'lucide-react';
 import { 
   collection, 
@@ -47,7 +49,14 @@ const AdminOrderRequests = () => {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const prevPendingCountRef = useRef<number>(0);
+  const isInitialLoadRef = useRef(true);
   const { play: playNotification, stop: stopNotification } = useNotificationSound(4);
+  const { isGranted, requestPermission, showNotification } = useBrowserNotification();
+
+  // Request notification permission on mount
+  useEffect(() => {
+    requestPermission();
+  }, [requestPermission]);
 
   useEffect(() => {
     // Subscribe to pending orders
@@ -77,16 +86,28 @@ const AdminOrderRequests = () => {
       });
       const sortedOrders = orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       
-      // Play notification if new pending orders arrived
-      if (sortedOrders.length > prevPendingCountRef.current && prevPendingCountRef.current > 0) {
+      // Play notification if new pending orders arrived (skip initial load)
+      const newOrderCount = sortedOrders.length - prevPendingCountRef.current;
+      if (!isInitialLoadRef.current && newOrderCount > 0) {
+        // Play ringtone sound
         if (soundEnabled) {
           playNotification();
         }
+        
+        // Show browser push notification
+        showNotification('🛒 New Order Received!', {
+          body: `${newOrderCount} new order(s) pending review. Click to view.`,
+          tag: 'new-order',
+        });
+        
+        // Show in-app toast
         toast({
           title: 'New Order Received!',
-          description: `${sortedOrders.length - prevPendingCountRef.current} new order(s) pending review`,
+          description: `${newOrderCount} new order(s) pending review`,
         });
       }
+      
+      isInitialLoadRef.current = false;
       prevPendingCountRef.current = sortedOrders.length;
       
       setPendingOrders(sortedOrders);
