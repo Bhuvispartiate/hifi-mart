@@ -16,7 +16,7 @@ const Auth = () => {
   const [fullPhoneNumber, setFullPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const { user, sendOTP, verifyOTP, demoLogin, isDemoMode } = useAuth();
+  const { user, sendOTP, verifyOTP, demoLogin, isDemoMode, onboardingCompleted } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
@@ -25,9 +25,15 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate(returnUrl, { replace: true });
+      // Check if onboarding is completed
+      if (onboardingCompleted === false) {
+        navigate('/onboarding', { replace: true });
+      } else if (onboardingCompleted === true) {
+        navigate(returnUrl, { replace: true });
+      }
+      // If onboardingCompleted is null, we're still checking - wait
     }
-  }, [user, navigate, returnUrl]);
+  }, [user, onboardingCompleted, navigate, returnUrl]);
 
   const formatPhoneNumber = (value: string) => {
     // Remove all non-digits
@@ -114,7 +120,10 @@ const Auth = () => {
         <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
           <ShoppingBag className="w-7 h-7 text-primary-foreground" />
         </div>
-        <span className="text-2xl font-bold text-foreground">FreshMart</span>
+        <div className="text-left">
+          <span className="text-2xl font-bold text-foreground block">HiFi-Mart</span>
+          <span className="text-xs text-muted-foreground">Ponneri's Grocery Store</span>
+        </div>
       </div>
 
       <Card className="w-full max-w-md">
