@@ -88,42 +88,44 @@ const OnboardingAddress = () => {
         selectedLocation.address,
       ].filter(Boolean).join(', ');
 
+      const addressData = {
+        id: `addr-${Date.now()}`,
+        label: addressTypes.find(t => t.id === addressType)?.label || 'Home',
+        address: fullAddress,
+        lat: selectedLocation.lat,
+        lng: selectedLocation.lng,
+        isDefault: true,
+      };
+
+      // Build profile data, only include email if it has a value
+      const profileData: {
+        phoneNumber: string;
+        displayName: string;
+        email?: string;
+        addresses: typeof addressData[];
+        onboardingCompleted: boolean;
+      } = {
+        phoneNumber: verifiedPhone,
+        displayName: name,
+        addresses: [addressData],
+        onboardingCompleted: true,
+      };
+
+      // Only add email if it's not empty
+      if (email.trim()) {
+        profileData.email = email.trim();
+      }
+
       // Check if profile exists
       const existingProfile = await getUserProfile(user.uid);
       
       if (existingProfile) {
         // Update existing profile
         const { updateUserProfile } = await import('@/lib/firestoreService');
-        await updateUserProfile(user.uid, {
-          phoneNumber: verifiedPhone,
-          displayName: name,
-          email: email || undefined,
-          addresses: [{
-            id: `addr-${Date.now()}`,
-            label: addressTypes.find(t => t.id === addressType)?.label || 'Home',
-            address: fullAddress,
-            lat: selectedLocation.lat,
-            lng: selectedLocation.lng,
-            isDefault: true,
-          }],
-          onboardingCompleted: true,
-        });
+        await updateUserProfile(user.uid, profileData);
       } else {
         // Create new profile
-        await createUserProfile(user.uid, {
-          phoneNumber: verifiedPhone,
-          displayName: name,
-          email: email || undefined,
-          addresses: [{
-            id: `addr-${Date.now()}`,
-            label: addressTypes.find(t => t.id === addressType)?.label || 'Home',
-            address: fullAddress,
-            lat: selectedLocation.lat,
-            lng: selectedLocation.lng,
-            isDefault: true,
-          }],
-          onboardingCompleted: true,
-        });
+        await createUserProfile(user.uid, profileData);
       }
 
       // Clear session storage
