@@ -127,11 +127,11 @@ const Checkout = () => {
     setIsPlacingOrder(true);
     
     try {
-      // Create order in Firestore
+      // Create order in Firestore with pending status - requires admin approval
       const orderData = {
         userId: user.uid,
         date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-        status: 'confirmed' as const,
+        status: 'pending' as const,
         total: grandTotal,
         items: items.map(item => ({
           name: item.name,
@@ -143,7 +143,7 @@ const Checkout = () => {
         deliveryCoordinates: pinnedLocation ? { lat: pinnedLocation.lat, lng: pinnedLocation.lng } : undefined,
         timeline: [
           { status: 'Order Placed', time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), completed: true },
-          { status: 'Order Confirmed', time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), completed: true },
+          { status: 'Awaiting Confirmation', time: '', completed: false },
           { status: 'Preparing', time: '', completed: false },
           { status: 'Out for Delivery', time: '', completed: false },
           { status: 'Delivered', time: '', completed: false },
@@ -157,7 +157,7 @@ const Checkout = () => {
         await clearCart();
         toast({
           title: '🎉 Order placed successfully!',
-          description: 'Your order will be delivered in 10-15 minutes',
+          description: 'Waiting for confirmation from the store',
         });
         navigate('/orders');
       } else {
