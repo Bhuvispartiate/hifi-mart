@@ -85,24 +85,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pendingPhoneRef.current = phoneNumber;
 
     try {
+      console.log('[MojoAuth] Initializing with API Key:', MOJOAUTH_API_KEY);
+      console.log('[MojoAuth] Sending OTP to:', phoneNumber);
+      
       // Dynamically import MojoAuth SDK
       const MojoAuth = (await import('mojoauth-web-sdk')).default;
+      console.log('[MojoAuth] SDK loaded successfully');
       
       const config = {
         language: 'en',
         source: [{ type: 'phone' as const, feature: 'otp' as const }],
       };
+      console.log('[MojoAuth] Config:', JSON.stringify(config));
 
       mojoAuthRef.current = new MojoAuth(MOJOAUTH_API_KEY, config);
+      console.log('[MojoAuth] Instance created');
       
       // Send OTP using MojoAuth
-      await mojoAuthRef.current.signInWithPhone(phoneNumber);
+      const otpResponse = await mojoAuthRef.current.signInWithPhone(phoneNumber);
+      console.log('[MojoAuth] OTP Send Response:', JSON.stringify(otpResponse, null, 2));
       
       setIsDemoMode(false);
       return { success: true };
     } catch (error: any) {
-      console.error('MojoAuth sendOTP error:', error);
+      console.error('[MojoAuth] ❌ sendOTP ERROR:', error);
+      console.error('[MojoAuth] Error name:', error?.name);
+      console.error('[MojoAuth] Error message:', error?.message);
+      console.error('[MojoAuth] Error stack:', error?.stack);
+      console.error('[MojoAuth] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      
       // Fall back to demo mode if MojoAuth fails
+      console.log('[MojoAuth] Falling back to demo mode. Use OTP: 123456');
       setIsDemoMode(true);
       return { success: true };
     }
