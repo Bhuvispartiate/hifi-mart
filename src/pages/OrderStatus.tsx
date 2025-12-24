@@ -238,7 +238,8 @@ const OrderStatus = () => {
                 const Icon = step.status === 'Delivered' ? CheckCircle :
                             step.status === 'Reached Destination' ? MapPin :
                             step.status === 'Out for Delivery' ? Truck :
-                            step.status === 'Order Confirmed' ? CheckCircle :
+                            step.status === 'Preparing' ? Clock :
+                            step.status === 'Confirmed' ? CheckCircle :
                             step.status === 'Order Placed' ? Package :
                             step.status === 'Cancelled' ? CheckCircle : Clock;
                 
@@ -247,8 +248,10 @@ const OrderStatus = () => {
                   switch (status) {
                     case 'Order Placed':
                       return 'Checking for stock availability';
-                    case 'Order Confirmed':
-                      return 'Awaiting for delivery partner';
+                    case 'Confirmed':
+                      return 'Awaiting delivery partner acceptance';
+                    case 'Preparing':
+                      return 'Delivery partner accepted, preparing order';
                     case 'Out for Delivery':
                       return 'Order picked by delivery partner';
                     case 'Reached Destination':

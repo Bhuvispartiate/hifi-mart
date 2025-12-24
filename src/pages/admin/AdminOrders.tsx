@@ -40,7 +40,8 @@ import InvoiceDialog from '@/components/admin/InvoiceDialog';
 
 const statusOptions = [
   { value: 'pending', label: 'Order Placed' },
-  { value: 'confirmed', label: 'Order Confirmed' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'preparing', label: 'Preparing' },
   { value: 'out_for_delivery', label: 'Out For Delivery' },
   { value: 'reached_destination', label: 'Reached Destination' },
   { value: 'delivered', label: 'Delivered' },
@@ -50,6 +51,7 @@ const statusOptions = [
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: 'Order Placed', variant: 'secondary' },
   confirmed: { label: 'Confirmed', variant: 'default' },
+  preparing: { label: 'Preparing', variant: 'default' },
   out_for_delivery: { label: 'Out For Delivery', variant: 'default' },
   reached_destination: { label: 'Reached', variant: 'default' },
   delivered: { label: 'Delivered', variant: 'default' },

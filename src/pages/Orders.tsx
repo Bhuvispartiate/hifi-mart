@@ -19,10 +19,16 @@ const statusConfig = {
     description: 'Checking stock availability',
   },
   confirmed: {
-    label: 'Order Confirmed',
+    label: 'Confirmed',
     color: 'bg-accent text-accent-foreground',
     icon: '✓',
-    description: 'Awaiting delivery partner',
+    description: 'Awaiting delivery partner acceptance',
+  },
+  preparing: {
+    label: 'Preparing',
+    color: 'bg-primary/80 text-primary-foreground',
+    icon: '🍳',
+    description: 'Delivery partner accepted, preparing order',
   },
   out_for_delivery: {
     label: 'Out For Delivery',
@@ -151,6 +157,14 @@ const Orders = () => {
                   </div>
 
                   {/* Status Info */}
+                  {order.status === 'preparing' && (
+                    <div className="flex items-center gap-2 mb-3 text-sm bg-primary/10 p-2 rounded-lg">
+                      <span className="text-foreground">
+                        🍳 Delivery partner accepted, preparing your order
+                      </span>
+                    </div>
+                  )}
+
                   {order.status === 'out_for_delivery' && order.eta && (
                     <div className="flex items-center gap-2 mb-3 text-sm">
                       <Clock className="w-4 h-4 text-primary" />
@@ -197,7 +211,7 @@ const Orders = () => {
                     </Button>
                     <Link to={`/order/${order.id}`}>
                       <Button variant="ghost" size="sm" className="text-primary">
-                        {(order.status === 'out_for_delivery' || order.status === 'reached_destination') ? 'Track Order' : 'View Details'}
+                        {(order.status === 'preparing' || order.status === 'out_for_delivery' || order.status === 'reached_destination') ? 'Track Order' : 'View Details'}
                         <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     </Link>
