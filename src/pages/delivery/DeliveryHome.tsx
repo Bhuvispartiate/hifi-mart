@@ -43,6 +43,29 @@ const formatDistance = (meters: number) => {
   return `${Math.round(meters)} m`;
 };
 
+// Helper to find nearest point on a route to snap marker to road
+const findNearestPointOnRoute = (
+  position: { lat: number; lng: number },
+  routeCoords: number[][]
+): [number, number] => {
+  if (!routeCoords.length) return [position.lng, position.lat];
+
+  let minDist = Infinity;
+  let nearestPoint: [number, number] = [position.lng, position.lat];
+
+  for (const coord of routeCoords) {
+    const dx = coord[0] - position.lng;
+    const dy = coord[1] - position.lat;
+    const dist = dx * dx + dy * dy;
+    if (dist < minDist) {
+      minDist = dist;
+      nearestPoint = [coord[0], coord[1]];
+    }
+  }
+
+  return nearestPoint;
+};
+
 export default function DeliveryHome() {
   const navigate = useNavigate();
   const { deliveryPartner } = useDeliveryAuth();
@@ -237,14 +260,18 @@ export default function DeliveryHome() {
         zoom: 13,
       });
 
-      // Create custom motorbike marker element
+      // Create custom delivery bike marker element using the uploaded image
       const bikeEl = document.createElement('div');
-      bikeEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="#3B82F6">
-        <path d="M19.5 15.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm-15 0a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm15-1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-15 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm13.25-4l1.5 3h1.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1-.67-.42L15.5 11h-3l-1.75 3.5a.75.75 0 0 1-.67.42H8.5v-1.5h1.08l1.5-3H8.75a.75.75 0 0 1-.53-.22l-2-2a.75.75 0 0 1 1.06-1.06L9.06 9h3.69a.75.75 0 0 1 .67.42l.83 1.58h3.5zm-5.25-5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/>
-      </svg>`;
+      bikeEl.style.width = '48px';
+      bikeEl.style.height = '48px';
+      bikeEl.style.backgroundImage = 'url(/images/delivery-bike.png)';
+      bikeEl.style.backgroundSize = 'contain';
+      bikeEl.style.backgroundRepeat = 'no-repeat';
+      bikeEl.style.backgroundPosition = 'center';
       bikeEl.style.cursor = 'pointer';
+      bikeEl.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
 
-      deliveryMarkerRef.current = new mapboxgl.Marker({ element: bikeEl })
+      deliveryMarkerRef.current = new mapboxgl.Marker({ element: bikeEl, anchor: 'center' })
         .setLngLat([start.lng, start.lat])
         .addTo(map.current);
 
@@ -318,9 +345,11 @@ export default function DeliveryHome() {
           };
           startCoordsRef.current = currentPos;
 
-          // Update delivery marker position
-          if (deliveryMarkerRef.current) {
-            deliveryMarkerRef.current.setLngLat([currentPos.lng, currentPos.lat]);
+          // Snap marker to the nearest point on the selected route
+          if (deliveryMarkerRef.current && routeOptions[selectedRouteIndex]) {
+            const routeCoords = routeOptions[selectedRouteIndex].geometry.coordinates;
+            const snappedPoint = findNearestPointOnRoute(currentPos, routeCoords);
+            deliveryMarkerRef.current.setLngLat(snappedPoint);
           }
 
           if (endCoordsRef.current) {
@@ -338,7 +367,7 @@ export default function DeliveryHome() {
     }, 30000); // 30 seconds
 
     return () => clearInterval(intervalId);
-  }, [status, selectedRouteIndex]);
+  }, [status, selectedRouteIndex, routeOptions]);
 
   useEffect(() => {
     if (status !== 'navigating') return;
