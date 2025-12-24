@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MapPin, Package, Store, Clock, CheckCircle2, Navigation, Phone, X, KeyRound, Loader2, Bike } from 'lucide-react';
+import { MapPin, Package, Store, Clock, CheckCircle2, Navigation, Phone, X, KeyRound, Loader2, Bike, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { DeliveryBottomNav } from '@/components/delivery/DeliveryBottomNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
+import { useNotificationSound } from '@/hooks/useNotificationSound';
 import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp } from '@/lib/firestoreService';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -77,11 +78,14 @@ export default function DeliveryHome() {
   const [routeOptions, setRouteOptions] = useState<RouteOption[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const startCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const endCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const deliveryMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const hadOrderRef = useRef(false);
+  const { play: playNotification, stop: stopNotification } = useNotificationSound(5);
 
   // Subscribe to real-time orders assigned to this delivery partner
   useEffect(() => {
@@ -97,6 +101,18 @@ export default function DeliveryHome() {
       );
       
       if (myActiveOrder) {
+        // Play notification if new order assigned (wasn't assigned before)
+        if (!hadOrderRef.current && myActiveOrder.status === 'confirmed') {
+          if (soundEnabled) {
+            playNotification();
+          }
+          toast({
+            title: 'New Order Assigned!',
+            description: `Order #${myActiveOrder.id.slice(0, 8).toUpperCase()} assigned to you`,
+          });
+        }
+        hadOrderRef.current = true;
+        
         setCurrentOrder(myActiveOrder);
         
         // Set UI status based on order status
@@ -111,13 +127,14 @@ export default function DeliveryHome() {
         }
       } else {
         // No active order for this partner
+        hadOrderRef.current = false;
         setCurrentOrder(null);
         setStatus('waiting');
       }
     });
 
     return () => unsubscribe();
-  }, [deliveryPartner?.id]);
+  }, [deliveryPartner?.id, soundEnabled, playNotification]);
 
   // Initialize map when navigating
   useEffect(() => {
@@ -600,9 +617,24 @@ export default function DeliveryHome() {
                 <p className="text-sm opacity-90">Welcome back</p>
                 <h1 className="text-xl font-bold">{deliveryPartner?.name || 'Delivery Partner'}</h1>
               </div>
-              <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground">
-                Online
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground">
+                  Online
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-primary-foreground hover:bg-primary-foreground/20"
+                  onClick={() => {
+                    setSoundEnabled(!soundEnabled);
+                    if (soundEnabled) {
+                      stopNotification();
+                    }
+                  }}
+                >
+                  {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
 
