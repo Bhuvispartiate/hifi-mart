@@ -111,9 +111,9 @@ export const offers = [
 ];
 
 export const banners = [
-  { id: "1", title: "Fresh Vegetables", subtitle: "Farm to table in 10 mins", image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&h=400&fit=crop", color: "bg-primary" },
-  { id: "2", title: "Dairy Products", subtitle: "Always fresh, always pure", image: "https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=800&h=400&fit=crop", color: "bg-accent" },
-  { id: "3", title: "Snacks & Munchies", subtitle: "Party time essentials", image: "https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=800&h=400&fit=crop", color: "bg-secondary" },
+  { id: "1", title: "Welcome to HiFi-Mart", subtitle: "Ponneri's favorite grocery store", image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&h=400&fit=crop", color: "bg-primary" },
+  { id: "2", title: "Fresh from Ponneri", subtitle: "Local produce, delivered fast", image: "https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=800&h=400&fit=crop", color: "bg-accent" },
+  { id: "3", title: "10-Minute Delivery", subtitle: "Hyper-local, super quick!", image: "https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=800&h=400&fit=crop", color: "bg-secondary" },
 ];
 
 export const mockOrders = [
