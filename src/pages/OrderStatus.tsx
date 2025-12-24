@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Phone, MessageCircle, Clock, Package, CheckCircle, Truck, MapPin, Navigation, Loader2 } from 'lucide-react';
+import { ArrowLeft, Phone, MessageCircle, Clock, Package, CheckCircle, Truck, MapPin, Navigation, Loader2, KeyRound, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -118,6 +118,39 @@ const OrderStatus = () => {
                 </div>
               </div>
               <Badge className="bg-primary text-primary-foreground">Live</Badge>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* OTP Card - Only shown when delivery partner has reached destination */}
+      {order.status === 'reached_destination' && order.deliveryOtp && (
+        <div className="p-4 pb-0">
+          <Card className="p-4 bg-success/10 border-success/30">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-success/20 flex items-center justify-center">
+                <KeyRound className="h-7 w-7 text-success" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground mb-1">Your Delivery OTP</p>
+                <p className="text-3xl font-bold text-foreground tracking-widest">{order.deliveryOtp}</p>
+                <p className="text-xs text-muted-foreground mt-1">Share this code with the delivery partner to complete delivery</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Reached Destination Banner */}
+      {order.status === 'reached_destination' && (
+        <div className="px-4 pt-4">
+          <Card className="p-3 bg-primary/5 border-primary/20">
+            <div className="flex items-center gap-3">
+              <Home className="h-5 w-5 text-primary" />
+              <div>
+                <p className="font-medium text-foreground">Delivery partner has arrived!</p>
+                <p className="text-sm text-muted-foreground">Please share the OTP shown above to receive your order</p>
+              </div>
             </div>
           </Card>
         </div>

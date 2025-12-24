@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { useRealtimeOrders } from '@/hooks/useRealtimeOrders';
-import { updateOrderStatus, Order } from '@/lib/firestoreService';
+import { 
+  updateOrderStatus, 
+  Order, 
+  autoAssignDeliveryPartner,
+  setDeliveryOtp
+} from '@/lib/firestoreService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +30,9 @@ import {
   Search, 
   Eye, 
   FileText,
-  Activity
+  Activity,
+  Truck,
+  MapPin
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
@@ -36,6 +43,7 @@ const statusOptions = [
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'preparing', label: 'Preparing' },
   { value: 'out_for_delivery', label: 'Out for Delivery' },
+  { value: 'reached_destination', label: 'Reached Destination' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
@@ -45,6 +53,7 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
   confirmed: { label: 'Confirmed', variant: 'default' },
   preparing: { label: 'Preparing', variant: 'outline' },
   out_for_delivery: { label: 'Out for Delivery', variant: 'default' },
+  reached_destination: { label: 'Reached', variant: 'default' },
   delivered: { label: 'Delivered', variant: 'default' },
   cancelled: { label: 'Cancelled', variant: 'destructive' },
 };
@@ -66,6 +75,24 @@ const AdminOrders = () => {
 
   const handleStatusChange = async (orderId: string, newStatus: Order['status']) => {
     try {
+      // Auto-assign delivery partner when moving to out_for_delivery
+      if (newStatus === 'out_for_delivery') {
+        const partner = await autoAssignDeliveryPartner(orderId);
+        if (partner) {
+          toast({ title: `Assigned to ${partner.name}` });
+        } else {
+          toast({ title: 'No delivery partner available', variant: 'destructive' });
+        }
+      }
+
+      // Generate OTP when reaching destination
+      if (newStatus === 'reached_destination') {
+        const otp = await setDeliveryOtp(orderId);
+        if (otp) {
+          toast({ title: `OTP generated: ${otp}`, description: 'Customer will see this OTP' });
+        }
+      }
+
       await updateOrderStatus(orderId, newStatus);
       toast({ title: `Order status updated to ${newStatus.replace('_', ' ')}` });
     } catch (error) {
