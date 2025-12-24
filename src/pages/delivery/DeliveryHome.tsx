@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { useBrowserNotification } from '@/hooks/useBrowserNotification';
 import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp } from '@/lib/firestoreService';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -86,6 +87,12 @@ export default function DeliveryHome() {
   const deliveryMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const hadOrderRef = useRef(false);
   const { play: playNotification, stop: stopNotification } = useNotificationSound(5);
+  const { requestPermission, showNotification } = useBrowserNotification();
+
+  // Request notification permission on mount
+  useEffect(() => {
+    requestPermission();
+  }, [requestPermission]);
 
   // Subscribe to real-time orders assigned to this delivery partner
   useEffect(() => {
@@ -103,9 +110,18 @@ export default function DeliveryHome() {
       if (myActiveOrder) {
         // Play notification if new order assigned (wasn't assigned before)
         if (!hadOrderRef.current && myActiveOrder.status === 'confirmed') {
+          // Play ringtone sound
           if (soundEnabled) {
             playNotification();
           }
+          
+          // Show browser push notification
+          showNotification('🚀 New Delivery Assigned!', {
+            body: `Order #${myActiveOrder.id.slice(0, 8).toUpperCase()} - ₹${myActiveOrder.total}. Tap to accept.`,
+            tag: 'delivery-assigned',
+          });
+          
+          // Show in-app toast
           toast({
             title: 'New Order Assigned!',
             description: `Order #${myActiveOrder.id.slice(0, 8).toUpperCase()} assigned to you`,
@@ -134,7 +150,7 @@ export default function DeliveryHome() {
     });
 
     return () => unsubscribe();
-  }, [deliveryPartner?.id, soundEnabled, playNotification]);
+  }, [deliveryPartner?.id, soundEnabled, playNotification, showNotification]);
 
   // Initialize map when navigating
   useEffect(() => {
