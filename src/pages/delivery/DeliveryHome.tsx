@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { MapPin, Package, Store, Clock, CheckCircle2, Navigation, Phone, X, KeyRound, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,8 @@ export default function DeliveryHome() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [otpInput, setOtpInput] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [routeOptions, setRouteOptions] = useState<RouteOption[]>([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
 
@@ -65,6 +67,9 @@ export default function DeliveryHome() {
   useEffect(() => {
     if (status !== 'navigating' || !mapContainer.current) return;
 
+    setRouteOptions([]);
+    setSelectedRouteIndex(0);
+
     // Clean up existing map
     if (map.current) {
       map.current.remove();
@@ -86,10 +91,7 @@ export default function DeliveryHome() {
       },
       () => {
         // Fallback if geolocation fails - use Chennai area coordinates
-        initializeMap(
-          { lat: 13.0827, lng: 80.2707 }, 
-          destinationCoords
-        );
+        initializeMap({ lat: 13.0827, lng: 80.2707 }, destinationCoords);
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -102,6 +104,95 @@ export default function DeliveryHome() {
     };
   }, [status, currentOrder?.id]);
 
+  const applyRoutesToMap = useCallback((routes: RouteOption[], selectedIndex: number, opts?: { fit?: boolean }) => {
+    if (!map.current) return;
+
+    const selected = routes[selectedIndex];
+    if (!selected) return;
+
+    const run = () => {
+      if (!map.current) return;
+
+      const selectedFeature = {
+        type: 'Feature',
+        properties: { selected: true },
+        geometry: selected.geometry,
+      };
+
+      const altCollection = {
+        type: 'FeatureCollection',
+        features: routes
+          .map((r, idx) => ({
+            type: 'Feature',
+            properties: { selected: false, idx },
+            geometry: r.geometry,
+          }))
+          .filter((_, idx) => idx !== selectedIndex),
+      };
+
+      const selectedSource = map.current.getSource(ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+      if (selectedSource) {
+        selectedSource.setData(selectedFeature as any);
+      } else {
+        map.current.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: selectedFeature as any });
+      }
+
+      const altSource = map.current.getSource(ALT_ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+      if (altSource) {
+        altSource.setData(altCollection as any);
+      } else {
+        map.current.addSource(ALT_ROUTE_SOURCE_ID, { type: 'geojson', data: altCollection as any });
+      }
+
+      if (!map.current.getLayer(ALT_ROUTE_LAYER_ID)) {
+        map.current.addLayer({
+          id: ALT_ROUTE_LAYER_ID,
+          type: 'line',
+          source: ALT_ROUTE_SOURCE_ID,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': '#94A3B8',
+            'line-width': 4,
+            'line-opacity': 0.5,
+          },
+        });
+      }
+
+      if (!map.current.getLayer(ROUTE_LAYER_ID)) {
+        map.current.addLayer({
+          id: ROUTE_LAYER_ID,
+          type: 'line',
+          source: ROUTE_SOURCE_ID,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': '#3B82F6',
+            'line-width': 6,
+            'line-opacity': 0.85,
+          },
+        });
+      }
+
+      const shouldFit = opts?.fit ?? false;
+      if (shouldFit) {
+        const coordinates = selected.geometry.coordinates;
+        if (coordinates?.length) {
+          const bounds = new mapboxgl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]);
+          for (const coord of coordinates) bounds.extend(coord as [number, number]);
+          map.current.fitBounds(bounds, { padding: 80, maxZoom: 16 });
+        }
+      }
+    };
+
+    if (map.current.loaded()) run();
+    else map.current.once('load', run);
+  }, []);
+
   const initializeMap = (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
     if (!mapContainer.current) return;
 
@@ -113,22 +204,17 @@ export default function DeliveryHome() {
         zoom: 13,
       });
 
-    new mapboxgl.Marker({ color: '#3B82F6' })
-      .setLngLat([start.lng, start.lat])
-      .addTo(map.current);
+      new mapboxgl.Marker({ color: '#3B82F6' }).setLngLat([start.lng, start.lat]).addTo(map.current);
+      new mapboxgl.Marker({ color: '#22C55E' }).setLngLat([end.lng, end.lat]).addTo(map.current);
 
-    new mapboxgl.Marker({ color: '#22C55E' })
-      .setLngLat([end.lng, end.lat])
-      .addTo(map.current);
-
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    map.current.addControl(
-      new mapboxgl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: true,
-        showUserHeading: true,
-      }),
-      'top-right'
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      map.current.addControl(
+        new mapboxgl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserHeading: true,
+        }),
+        'top-right'
       );
 
       fetchRoute(start, end);
@@ -142,58 +228,45 @@ export default function DeliveryHome() {
 
     try {
       const response = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+        `https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?alternatives=true&geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
       );
+
+      if (!response.ok) {
+        throw new Error(`Directions API error: ${response.status}`);
+      }
+
       const data = await response.json();
 
-      if (data.routes && data.routes[0]) {
-        const route = data.routes[0].geometry;
+      const routes: RouteOption[] = (data.routes ?? [])
+        .slice(0, 3)
+        .map((r: any) => ({
+          duration: typeof r.duration === 'number' ? r.duration : 0,
+          distance: typeof r.distance === 'number' ? r.distance : 0,
+          geometry: r.geometry as LineStringGeometry,
+        }))
+        .filter((r) => r.geometry?.coordinates?.length);
 
-        const addRouteLayer = () => {
-          if (!map.current || map.current.getSource('route')) return;
+      if (!routes.length) throw new Error('No routes returned');
 
-          map.current.addSource('route', {
-            type: 'geojson',
-            data: {
-              type: 'Feature',
-              properties: {},
-              geometry: route,
-            },
-          });
-
-          map.current.addLayer({
-            id: 'route',
-            type: 'line',
-            source: 'route',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round',
-            },
-            paint: {
-              'line-color': '#3B82F6',
-              'line-width': 6,
-              'line-opacity': 0.8,
-            },
-          });
-
-          const coordinates = route.coordinates;
-          const bounds = new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]);
-          for (const coord of coordinates) {
-            bounds.extend(coord);
-          }
-          map.current.fitBounds(bounds, { padding: 80 });
-        };
-
-        if (map.current.loaded()) {
-          addRouteLayer();
-        } else {
-          map.current.on('load', addRouteLayer);
-        }
-      }
+      setRouteOptions(routes);
+      setSelectedRouteIndex(0);
+      applyRoutesToMap(routes, 0, { fit: true });
     } catch (error) {
       console.error('Error fetching route:', error);
+      toast({
+        title: 'Route unavailable',
+        description: 'Unable to load navigation route. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
+
+  useEffect(() => {
+    if (status !== 'navigating') return;
+    if (!routeOptions.length) return;
+
+    applyRoutesToMap(routeOptions, selectedRouteIndex);
+  }, [applyRoutesToMap, routeOptions, selectedRouteIndex, status]);
 
   const handleAcceptOrder = async () => {
     setStatus('pickup');
@@ -260,7 +333,32 @@ export default function DeliveryHome() {
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
+
                 <p className="text-sm font-medium">{currentOrder.deliveryAddress}</p>
+
+                {routeOptions[selectedRouteIndex] && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatDuration(routeOptions[selectedRouteIndex].duration)} •{' '}
+                    {formatDistance(routeOptions[selectedRouteIndex].distance)}
+                  </p>
+                )}
+
+                {routeOptions.length > 1 && (
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                    {routeOptions.map((r, idx) => (
+                      <Button
+                        key={idx}
+                        type="button"
+                        variant={idx === selectedRouteIndex ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => setSelectedRouteIndex(idx)}
+                      >
+                        {formatDuration(r.duration)} • {formatDistance(r.distance)}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
