@@ -3,6 +3,7 @@ import {
   getProducts, 
   getUserByPhone, 
   createOfflineOrder,
+  getProductByBarcode,
   Product,
   UserProfile 
 } from '@/lib/firestoreService';
@@ -11,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -28,11 +30,14 @@ import {
   Minus,
   Trash2,
   Loader2,
-  CheckCircle
+  CheckCircle,
+  Scan,
+  ShoppingBag
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { LocationPicker } from '@/components/checkout/LocationPicker';
 import InvoiceDialog from '@/components/admin/InvoiceDialog';
+import BarcodeScanner from '@/components/admin/BarcodeScanner';
 import { Order, OrderItem } from '@/lib/firestoreService';
 
 interface CartItem {
@@ -60,6 +65,10 @@ const AdminHomeDelivery = () => {
   // Product search & cart
   const [productSearch, setProductSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  
+  // Order type
+  const [isTakeaway, setIsTakeaway] = useState(false);
   
   // Payment
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'card'>('cash');
@@ -135,8 +144,23 @@ const AdminHomeDelivery = () => {
   };
 
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const deliveryFee = 30;
+  const deliveryFee = isTakeaway ? 0 : 30;
   const total = subtotal + deliveryFee;
+
+  const handleBarcodeScan = async (barcode: string) => {
+    const product = await getProductByBarcode(barcode);
+    
+    if (product) {
+      addToCart(product);
+      toast({ title: `Added: ${product.name}` });
+    } else {
+      toast({ 
+        title: 'Product not found', 
+        description: `No product found with barcode: ${barcode}`,
+        variant: 'destructive' 
+      });
+    }
+  };
 
   const handleLocationSelect = (location: { address: string; lat: number; lng: number }) => {
     setNewAddress(location.address);
@@ -165,15 +189,16 @@ const AdminHomeDelivery = () => {
       return;
     }
 
-    const deliveryAddr = getDeliveryAddress();
-    const deliveryCoords = getDeliveryCoordinates();
+    // For takeaway, address is not required
+    const deliveryAddr = isTakeaway ? 'Takeaway - In Store Pickup' : getDeliveryAddress();
+    const deliveryCoords = isTakeaway ? null : getDeliveryCoordinates();
 
-    if (!deliveryAddr) {
+    if (!isTakeaway && !deliveryAddr) {
       toast({ title: 'Please select or enter delivery address', variant: 'destructive' });
       return;
     }
 
-    if (!customerName && !customer) {
+    if (!isTakeaway && !customerName && !customer) {
       toast({ title: 'Please enter customer name', variant: 'destructive' });
       return;
     }
@@ -188,8 +213,8 @@ const AdminHomeDelivery = () => {
     }));
 
     const orderId = await createOfflineOrder({
-      customerPhone: phoneNumber,
-      customerName: customer?.displayName || customerName,
+      customerPhone: phoneNumber || 'Walk-in',
+      customerName: isTakeaway ? (customerName || 'Walk-in Customer') : (customer?.displayName || customerName),
       deliveryAddress: deliveryAddr,
       deliveryCoordinates: deliveryCoords || undefined,
       items: orderItems,
@@ -226,6 +251,11 @@ const AdminHomeDelivery = () => {
       setSelectedAddress('');
       setNewAddress('');
       setCoordinates(null);
+      setIsTakeaway(false);
+      setCustomerName('');
+      setSelectedAddress('');
+      setNewAddress('');
+      setCoordinates(null);
     } else {
       toast({ title: 'Failed to create order', variant: 'destructive' });
     }
@@ -236,112 +266,167 @@ const AdminHomeDelivery = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Home Delivery</h1>
-        <p className="text-muted-foreground">Create orders for walk-in customers</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Billing</h1>
+          <p className="text-muted-foreground">Create orders for delivery or takeaway</p>
+        </div>
+        
+        {/* Order Type Toggle */}
+        <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+          <div className="flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="takeaway-toggle" className="text-sm font-medium cursor-pointer">
+              Takeaway
+            </Label>
+          </div>
+          <Switch 
+            id="takeaway-toggle"
+            checked={isTakeaway}
+            onCheckedChange={setIsTakeaway}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Customer & Products */}
         <div className="space-y-6">
-          {/* Customer Search */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Phone className="h-5 w-5" />
-                Customer Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Enter mobile number"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={searchCustomer} disabled={searchingCustomer}>
-                  {searchingCustomer ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-
-              {customer && (
-                <div className="p-4 bg-muted rounded-lg">
-                  <div className="flex items-center gap-2 mb-3">
-                    <User className="h-4 w-4 text-primary" />
-                    <span className="font-medium text-foreground">{customer.displayName}</span>
-                    <CheckCircle className="h-4 w-4 text-success" />
-                  </div>
-                  
-                  {customer.addresses.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>Select Address</Label>
-                      <RadioGroup value={selectedAddress} onValueChange={setSelectedAddress}>
-                        {customer.addresses.map((addr) => (
-                          <div key={addr.id} className="flex items-center space-x-2">
-                            <RadioGroupItem value={addr.id} id={addr.id} />
-                            <Label htmlFor={addr.id} className="text-sm font-normal cursor-pointer">
-                              <span className="font-medium">{addr.label}</span> - {addr.address}
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                  )}
+          {/* Customer Search - Only show for delivery orders */}
+          {!isTakeaway && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="h-5 w-5" />
+                  Customer Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter mobile number"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button onClick={searchCustomer} disabled={searchingCustomer}>
+                    {searchingCustomer ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
-              )}
 
-              {isNewCustomer && (
-                <div className="space-y-4 p-4 border border-dashed border-border rounded-lg">
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    New customer - enter details
-                  </p>
-                  <div className="space-y-2">
-                    <Label>Customer Name *</Label>
-                    <Input
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Enter name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      Delivery Address *
-                    </Label>
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-start"
-                      onClick={() => setLocationPickerOpen(true)}
-                    >
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {newAddress || 'Select Address on Map'}
-                    </Button>
-                    <LocationPicker 
-                      open={locationPickerOpen}
-                      onClose={() => setLocationPickerOpen(false)}
-                      onLocationSelect={handleLocationSelect} 
-                    />
-                    {newAddress && (
-                      <p className="text-sm text-muted-foreground mt-2">{newAddress}</p>
+                {customer && (
+                  <div className="p-4 bg-muted rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <User className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-foreground">{customer.displayName}</span>
+                      <CheckCircle className="h-4 w-4 text-success" />
+                    </div>
+                    
+                    {customer.addresses.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Select Address</Label>
+                        <RadioGroup value={selectedAddress} onValueChange={setSelectedAddress}>
+                          {customer.addresses.map((addr) => (
+                            <div key={addr.id} className="flex items-center space-x-2">
+                              <RadioGroupItem value={addr.id} id={addr.id} />
+                              <Label htmlFor={addr.id} className="text-sm font-normal cursor-pointer">
+                                <span className="font-medium">{addr.label}</span> - {addr.address}
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </div>
                     )}
                   </div>
+                )}
+
+                {isNewCustomer && (
+                  <div className="space-y-4 p-4 border border-dashed border-border rounded-lg">
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      New customer - enter details
+                    </p>
+                    <div className="space-y-2">
+                      <Label>Customer Name *</Label>
+                      <Input
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Enter name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Delivery Address *
+                      </Label>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start"
+                        onClick={() => setLocationPickerOpen(true)}
+                      >
+                        <MapPin className="h-4 w-4 mr-2" />
+                        {newAddress || 'Select Address on Map'}
+                      </Button>
+                      <LocationPicker 
+                        open={locationPickerOpen}
+                        onClose={() => setLocationPickerOpen(false)}
+                        onLocationSelect={handleLocationSelect} 
+                      />
+                      {newAddress && (
+                        <p className="text-sm text-muted-foreground mt-2">{newAddress}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Takeaway Customer Name (optional) */}
+          {isTakeaway && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingBag className="h-5 w-5" />
+                  Takeaway Order
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Customer Name (Optional)</Label>
+                  <Input
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Enter name or leave empty"
+                  />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="space-y-2">
+                  <Label>Phone Number (Optional)</Label>
+                  <Input
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="Enter phone for order updates"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Product Selection */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Add Products
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  Add Products
+                </div>
+                <Button onClick={() => setScannerOpen(true)} variant="outline" size="sm">
+                  <Scan className="h-4 w-4 mr-2" />
+                  Scan Barcode
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -450,10 +535,18 @@ const AdminHomeDelivery = () => {
                       <span className="text-muted-foreground">Subtotal</span>
                       <span className="text-foreground">₹{subtotal}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Delivery Fee</span>
-                      <span className="text-foreground">₹{deliveryFee}</span>
-                    </div>
+                    {!isTakeaway && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Delivery Fee</span>
+                        <span className="text-foreground">₹{deliveryFee}</span>
+                      </div>
+                    )}
+                    {isTakeaway && (
+                      <div className="flex justify-between text-sm text-success">
+                        <span>Takeaway (No Delivery)</span>
+                        <span>₹0</span>
+                      </div>
+                    )}
                     <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
                       <span className="text-foreground">Total</span>
                       <span className="text-foreground">₹{total}</span>
@@ -509,6 +602,13 @@ const AdminHomeDelivery = () => {
         order={createdOrder}
         open={invoiceOpen}
         onOpenChange={setInvoiceOpen}
+      />
+
+      {/* Barcode Scanner */}
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleBarcodeScan}
       />
     </div>
   );
