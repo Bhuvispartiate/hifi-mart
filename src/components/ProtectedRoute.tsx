@@ -5,11 +5,15 @@ import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  requireOnboarding?: boolean;
 }
 
-export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+export const ProtectedRoute = ({ children, requireOnboarding = true }: ProtectedRouteProps) => {
+  const { user, loading, onboardingCompleted } = useAuth();
   const location = useLocation();
+
+  // Check if current path is an onboarding route
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
 
   if (loading) {
     return (
@@ -19,8 +23,28 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
+  // If not logged in, redirect to auth
   if (!user) {
     return <Navigate to={`/auth?returnUrl=${encodeURIComponent(location.pathname)}`} replace />;
+  }
+
+  // Still checking onboarding status
+  if (onboardingCompleted === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // If onboarding is required and not completed, redirect to onboarding
+  if (requireOnboarding && !onboardingCompleted && !isOnboardingRoute) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  // If onboarding is completed and user is on onboarding route, redirect to home
+  if (onboardingCompleted && isOnboardingRoute) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

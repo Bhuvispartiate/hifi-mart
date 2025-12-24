@@ -40,20 +40,22 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Home />} />
+                {/* Auth route - only public route */}
                 <Route path="/auth" element={<Auth />} />
                 
-                {/* Onboarding routes */}
-                <Route path="/onboarding" element={<ProtectedRoute><OnboardingWelcome /></ProtectedRoute>} />
-                <Route path="/onboarding/profile" element={<ProtectedRoute><OnboardingProfile /></ProtectedRoute>} />
-                <Route path="/onboarding/address" element={<ProtectedRoute><OnboardingAddress /></ProtectedRoute>} />
+                {/* Onboarding routes - require auth but not onboarding completion */}
+                <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><OnboardingWelcome /></ProtectedRoute>} />
+                <Route path="/onboarding/profile" element={<ProtectedRoute requireOnboarding={false}><OnboardingProfile /></ProtectedRoute>} />
+                <Route path="/onboarding/address" element={<ProtectedRoute requireOnboarding={false}><OnboardingAddress /></ProtectedRoute>} />
                 
-                <Route path="/categories" element={<Categories />} />
-                <Route path="/offers" element={<Offers />} />
+                {/* Protected routes - require auth and onboarding completion */}
+                <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
+                <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
                 <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
                 <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
                 <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-                <Route path="/product/:id" element={<ProductDetail />} />
+                <Route path="/product/:id" element={<ProtectedRoute><ProductDetail /></ProtectedRoute>} />
                 <Route path="/order/:orderId" element={<ProtectedRoute><OrderStatus /></ProtectedRoute>} />
                 <Route path="/profile/settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
                 
