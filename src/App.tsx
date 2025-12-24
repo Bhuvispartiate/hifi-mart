@@ -23,6 +23,11 @@ import DeliveryHome from "./pages/delivery/DeliveryHome";
 import DeliveryOrders from "./pages/delivery/DeliveryOrders";
 import DeliveryProfile from "./pages/delivery/DeliveryProfile";
 
+// Onboarding pages
+import OnboardingWelcome from "./pages/onboarding/OnboardingWelcome";
+import OnboardingProfile from "./pages/onboarding/OnboardingProfile";
+import OnboardingAddress from "./pages/onboarding/OnboardingAddress";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -37,6 +42,12 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/auth" element={<Auth />} />
+                
+                {/* Onboarding routes */}
+                <Route path="/onboarding" element={<ProtectedRoute><OnboardingWelcome /></ProtectedRoute>} />
+                <Route path="/onboarding/profile" element={<ProtectedRoute><OnboardingProfile /></ProtectedRoute>} />
+                <Route path="/onboarding/address" element={<ProtectedRoute><OnboardingAddress /></ProtectedRoute>} />
+                
                 <Route path="/categories" element={<Categories />} />
                 <Route path="/offers" element={<Offers />} />
                 <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />

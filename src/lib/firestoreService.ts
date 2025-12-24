@@ -106,6 +106,26 @@ export interface Order {
   createdAt: Date;
 }
 
+export interface UserAddress {
+  id: string;
+  label: string;
+  address: string;
+  lat: number;
+  lng: number;
+  isDefault: boolean;
+}
+
+export interface UserProfile {
+  id: string;
+  phoneNumber: string;
+  displayName: string;
+  email?: string;
+  addresses: UserAddress[];
+  onboardingCompleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface CartItem {
   productId: string;
   quantity: number;
@@ -310,6 +330,133 @@ export const clearUserCart = async (userId: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error clearing cart:', error);
+    return false;
+  }
+};
+
+// ============= USER PROFILES =============
+
+export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  try {
+    const docRef = doc(db, 'users', userId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      } as UserProfile;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
+};
+
+export const createUserProfile = async (
+  userId: string, 
+  profile: Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'users', userId);
+    await setDoc(docRef, {
+      ...profile,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error creating user profile:', error);
+    return false;
+  }
+};
+
+export const updateUserProfile = async (
+  userId: string, 
+  updates: Partial<Omit<UserProfile, 'id' | 'createdAt'>>
+): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'users', userId);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return false;
+  }
+};
+
+export const addUserAddress = async (
+  userId: string,
+  address: Omit<UserAddress, 'id'>
+): Promise<boolean> => {
+  try {
+    const profile = await getUserProfile(userId);
+    if (!profile) return false;
+
+    const newAddress: UserAddress = {
+      ...address,
+      id: `addr-${Date.now()}`,
+    };
+
+    // If this is the first address or marked as default, update other addresses
+    let updatedAddresses = [...profile.addresses];
+    if (address.isDefault) {
+      updatedAddresses = updatedAddresses.map(a => ({ ...a, isDefault: false }));
+    }
+    updatedAddresses.push(newAddress);
+
+    return await updateUserProfile(userId, { addresses: updatedAddresses });
+  } catch (error) {
+    console.error('Error adding address:', error);
+    return false;
+  }
+};
+
+export const updateUserAddress = async (
+  userId: string,
+  addressId: string,
+  updates: Partial<Omit<UserAddress, 'id'>>
+): Promise<boolean> => {
+  try {
+    const profile = await getUserProfile(userId);
+    if (!profile) return false;
+
+    let updatedAddresses = profile.addresses.map(a => 
+      a.id === addressId ? { ...a, ...updates } : a
+    );
+
+    // If setting as default, unset other defaults
+    if (updates.isDefault) {
+      updatedAddresses = updatedAddresses.map(a => 
+        a.id === addressId ? a : { ...a, isDefault: false }
+      );
+    }
+
+    return await updateUserProfile(userId, { addresses: updatedAddresses });
+  } catch (error) {
+    console.error('Error updating address:', error);
+    return false;
+  }
+};
+
+export const deleteUserAddress = async (
+  userId: string,
+  addressId: string
+): Promise<boolean> => {
+  try {
+    const profile = await getUserProfile(userId);
+    if (!profile) return false;
+
+    const updatedAddresses = profile.addresses.filter(a => a.id !== addressId);
+    return await updateUserProfile(userId, { addresses: updatedAddresses });
+  } catch (error) {
+    console.error('Error deleting address:', error);
     return false;
   }
 };

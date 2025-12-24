@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { getUserProfile } from '@/lib/firestoreService';
 
 interface AuthUser {
   uid: string;
@@ -10,10 +11,12 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   isDemoMode: boolean;
+  onboardingCompleted: boolean | null;
   sendOTP: (phoneNumber: string) => Promise<{ success: boolean; error?: string }>;
   verifyOTP: (phoneNumber: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   demoLogin: () => void;
   logout: () => Promise<void>;
+  checkOnboardingStatus: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +31,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(true);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+
+  const checkOnboardingStatus = async (): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      const profile = await getUserProfile(user.uid);
+      const completed = profile?.onboardingCompleted ?? false;
+      setOnboardingCompleted(completed);
+      return completed;
+    } catch (error) {
+      console.error('Error checking onboarding status:', error);
+      return false;
+    }
+  };
 
   useEffect(() => {
     // Check for stored user
@@ -42,6 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
   }, []);
+
+  // Check onboarding status when user changes
+  useEffect(() => {
+    if (user) {
+      checkOnboardingStatus();
+    } else {
+      setOnboardingCompleted(null);
+    }
+  }, [user?.uid]);
 
   const sendOTP = async (phoneNumber: string): Promise<{ success: boolean; error?: string }> => {
     // Validate phone number format (basic validation)
@@ -87,12 +114,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     setUser(null);
+    setOnboardingCompleted(null);
     localStorage.removeItem('grocery_auth_user');
     pendingPhoneNumber = null;
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isDemoMode, sendOTP, verifyOTP, demoLogin, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      isDemoMode, 
+      onboardingCompleted,
+      sendOTP, 
+      verifyOTP, 
+      demoLogin, 
+      logout,
+      checkOnboardingStatus,
+    }}>
       {children}
     </AuthContext.Provider>
   );
