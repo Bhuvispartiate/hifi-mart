@@ -4,20 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { DeliveryBottomNav } from '@/components/delivery/DeliveryBottomNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
 import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp } from '@/lib/firestoreService';
-import { getMapboxPublicToken, setMapboxPublicToken } from '@/lib/mapboxToken';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -35,6 +26,7 @@ const ROUTE_SOURCE_ID = 'route-selected';
 const ALT_ROUTE_SOURCE_ID = 'route-alternatives';
 const ROUTE_LAYER_ID = 'route-selected-layer';
 const ALT_ROUTE_LAYER_ID = 'route-alt-layer';
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
 
 const formatDuration = (seconds: number) => {
   const mins = Math.max(0, Math.round(seconds / 60));
@@ -61,9 +53,6 @@ export default function DeliveryHome() {
   const [verifying, setVerifying] = useState(false);
   const [routeOptions, setRouteOptions] = useState<RouteOption[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
-  const [mapboxToken, setMapboxToken] = useState<string>(() => getMapboxPublicToken() ?? '');
-  const [mapboxTokenInput, setMapboxTokenInput] = useState<string>(() => getMapboxPublicToken() ?? '');
-  const [mapboxTokenDialogOpen, setMapboxTokenDialogOpen] = useState(false);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
 
@@ -105,24 +94,13 @@ export default function DeliveryHome() {
     setRouteOptions([]);
     setSelectedRouteIndex(0);
 
-    const token = (mapboxToken || getMapboxPublicToken() || '').trim();
-    if (!token) {
-      setMapboxTokenDialogOpen(true);
-      toast({
-        title: 'Map token required',
-        description: 'Add your Mapbox public token to load the map and routes.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     // Clean up existing map
     if (map.current) {
       map.current.remove();
       map.current = null;
     }
 
-    mapboxgl.accessToken = token;
+    mapboxgl.accessToken = MAPBOX_TOKEN;
 
     // Use delivery coordinates if available, otherwise use default destination
     const destinationCoords = currentOrder?.deliveryCoordinates || { lat: 13.1067, lng: 80.0923 }; // Default to Ponneri area
@@ -148,7 +126,7 @@ export default function DeliveryHome() {
         map.current = null;
       }
     };
-  }, [status, currentOrder?.id, mapboxToken]);
+  }, [status, currentOrder?.id]);
 
   const applyRoutesToMap = useCallback((routes: RouteOption[], selectedIndex: number, opts?: { fit?: boolean }) => {
     if (!map.current) return;
@@ -250,18 +228,6 @@ export default function DeliveryHome() {
         zoom: 13,
       });
 
-      map.current.on('error', (e) => {
-        const status = (e as any)?.error?.status;
-        if (status === 401) {
-          setMapboxTokenDialogOpen(true);
-          toast({
-            title: 'Invalid Mapbox token',
-            description: 'Please update your Mapbox public token to load the map.',
-            variant: 'destructive',
-          });
-        }
-      });
-
       new mapboxgl.Marker({ color: '#3B82F6' }).setLngLat([start.lng, start.lat]).addTo(map.current);
       new mapboxgl.Marker({ color: '#22C55E' }).setLngLat([end.lng, end.lat]).addTo(map.current);
 
@@ -288,16 +254,6 @@ export default function DeliveryHome() {
       const response = await fetch(
         `https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?alternatives=true&geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
       );
-
-      if (response.status === 401) {
-        setMapboxTokenDialogOpen(true);
-        toast({
-          title: 'Invalid Mapbox token',
-          description: 'Your token must allow Styles + Directions access.',
-          variant: 'destructive',
-        });
-        return;
-      }
 
       if (!response.ok) {
         throw new Error(`Directions API error: ${response.status}`);
@@ -382,52 +338,8 @@ export default function DeliveryHome() {
     setStatus('pickup');
   };
 
-  const handleSaveMapboxToken = () => {
-    const token = mapboxTokenInput.trim();
-    if (!token) {
-      toast({ title: 'Token required', description: 'Please paste your Mapbox public token.', variant: 'destructive' });
-      return;
-    }
-
-    setMapboxPublicToken(token);
-    setMapboxToken(token);
-    setMapboxTokenDialogOpen(false);
-
-    toast({ title: 'Map token saved', description: 'Navigation map will load now.' });
-  };
-
   return (
     <div className="min-h-screen bg-background pb-20">
-      <Dialog open={mapboxTokenDialogOpen} onOpenChange={setMapboxTokenDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Map setup</DialogTitle>
-            <DialogDescription>
-              Paste your Mapbox <span className="font-medium">public token</span> (starts with <span className="font-mono">pk.</span>) to enable maps + routing.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2">
-            <Input
-              value={mapboxTokenInput}
-              onChange={(e) => setMapboxTokenInput(e.target.value)}
-              placeholder="pk.eyJ..."
-              autoComplete="off"
-            />
-            <p className="text-xs text-muted-foreground">
-              Ensure the token has <span className="font-medium">Styles: Read</span> and <span className="font-medium">Directions: Read</span> permissions and allows this site/domain.
-            </p>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setMapboxTokenDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleSaveMapboxToken}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {status === 'navigating' && currentOrder ? (
         // Full screen navigation mode
         <div className="fixed inset-0 z-50 bg-background flex flex-col">
