@@ -152,8 +152,9 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
         // Add navigation controls
         map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-        // Create custom marker element
+        // Create custom marker element with proper anchor point at tip
         const markerEl = document.createElement('div');
+        markerEl.style.cssText = 'width: 40px; height: 48px; position: relative;';
         markerEl.innerHTML = `
           <div style="
             width: 40px; 
@@ -165,15 +166,20 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
             align-items: center;
             justify-content: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            position: absolute;
+            top: 0;
+            left: 0;
           ">
             <div style="transform: rotate(45deg); color: white; font-size: 18px;">📍</div>
           </div>
         `;
 
-        // Add draggable marker
+        // Add draggable marker with anchor at the tip (bottom-left corner after rotation)
         marker.current = new mapboxgl.Marker({
           element: markerEl,
           draggable: true,
+          anchor: 'bottom-left', // Anchor at tip of the rotated pin
+          offset: [14, 6], // Fine-tune offset so tip aligns with coordinates
         })
           .setLngLat([initialLng, initialLat])
           .addTo(map.current);
