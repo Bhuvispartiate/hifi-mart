@@ -324,7 +324,7 @@ export default function DeliveryHome() {
     try {
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
+        style: 'mapbox://styles/mapbox/satellite-streets-v12',
         center: [(start.lng + end.lng) / 2, (start.lat + end.lat) / 2],
         zoom: 13,
       });
