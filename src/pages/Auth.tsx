@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { ShoppingBag, Phone, ArrowLeft, Sparkles } from 'lucide-react';
+import { ShoppingBag, Phone, ArrowLeft } from 'lucide-react';
 
 type AuthStep = 'phone' | 'otp';
 
@@ -16,7 +16,7 @@ const Auth = () => {
   const [fullPhoneNumber, setFullPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const { user, sendOTP, verifyOTP, demoLogin, isDemoMode, onboardingCompleted } = useAuth();
+  const { user, sendOTP, verifyOTP, onboardingCompleted } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
@@ -62,7 +62,7 @@ const Auth = () => {
       setStep('otp');
       toast({
         title: 'OTP Sent',
-        description: isDemoMode ? 'Use 123456 as demo OTP' : 'Please check your phone for OTP',
+        description: 'Please check your phone for OTP',
       });
     } else {
       toast({
@@ -103,14 +103,6 @@ const Auth = () => {
     }
   };
 
-  const handleDemoLogin = () => {
-    demoLogin();
-    toast({
-      title: 'Demo Login',
-      description: 'Logged in as Demo User',
-    });
-    navigate(returnUrl, { replace: true });
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background flex flex-col items-center justify-center p-4">
@@ -194,12 +186,6 @@ const Auth = () => {
                 </InputOTP>
               </div>
 
-              {isDemoMode && (
-                <p className="text-sm text-center text-muted-foreground">
-                  Demo mode: Use OTP <span className="font-mono font-bold text-primary">123456</span>
-                </p>
-              )}
-
               <Button type="submit" className="w-full" disabled={loading || otp.length !== 6}>
                 {loading ? 'Verifying...' : 'Verify & Login'}
               </Button>
@@ -217,24 +203,6 @@ const Auth = () => {
               </Button>
             </form>
           )}
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or</span>
-            </div>
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full gap-2"
-            onClick={handleDemoLogin}
-          >
-            <Sparkles className="h-4 w-4" />
-            Quick Demo Login
-          </Button>
 
           <p className="text-xs text-center text-muted-foreground">
             By continuing, you agree to our Terms of Service and Privacy Policy

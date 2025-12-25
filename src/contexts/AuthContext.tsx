@@ -10,11 +10,9 @@ interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  isDemoMode: boolean;
   onboardingCompleted: boolean | null;
   sendOTP: (phoneNumber: string) => Promise<{ success: boolean; error?: string }>;
   verifyOTP: (phoneNumber: string, otp: string) => Promise<{ success: boolean; error?: string }>;
-  demoLogin: () => void;
   logout: () => Promise<void>;
   checkOnboardingStatus: () => Promise<boolean>;
   setOnboardingCompletedLocal: (completed: boolean) => void;
@@ -22,16 +20,12 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo OTP for testing
-const DEMO_OTP = '123456';
-
 // Store pending phone number for verification
 let pendingPhoneNumber: string | null = null;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(true);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
 
   const checkOnboardingStatus = async (): Promise<boolean> => {
@@ -91,30 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const verifyOTP = async (phoneNumber: string, otp: string): Promise<{ success: boolean; error?: string }> => {
-    // Verify OTP matches demo OTP
-    if (otp === DEMO_OTP) {
-      const demoUser: AuthUser = {
-        uid: 'demo-user-' + Date.now(),
+    // For now, validate OTP format only (6 digits)
+    // TODO: Implement real OTP verification with Firebase
+    if (otp.length === 6 && /^\d{6}$/.test(otp)) {
+      const newUser: AuthUser = {
+        uid: 'user-' + Date.now(),
         phoneNumber: phoneNumber || pendingPhoneNumber || '',
         displayName: 'User',
       };
-      setUser(demoUser);
-      localStorage.setItem('grocery_auth_user', JSON.stringify(demoUser));
+      setUser(newUser);
+      localStorage.setItem('grocery_auth_user', JSON.stringify(newUser));
       pendingPhoneNumber = null;
       return { success: true };
     }
 
-    return { success: false, error: 'Invalid OTP. Use 123456' };
-  };
-
-  const demoLogin = () => {
-    const demoUser: AuthUser = {
-      uid: 'demo-user-' + Date.now(),
-      phoneNumber: '+91 98765 43210',
-      displayName: 'Demo User',
-    };
-    setUser(demoUser);
-    localStorage.setItem('grocery_auth_user', JSON.stringify(demoUser));
+    return { success: false, error: 'Invalid OTP. Please enter a valid 6-digit code.' };
   };
 
   const logout = async () => {
@@ -129,11 +114,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
-        isDemoMode,
         onboardingCompleted,
         sendOTP,
         verifyOTP,
-        demoLogin,
         logout,
         checkOnboardingStatus,
         setOnboardingCompletedLocal,
