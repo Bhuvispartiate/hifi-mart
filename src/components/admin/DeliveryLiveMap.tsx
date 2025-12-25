@@ -6,7 +6,7 @@ import { getMapboxPublicToken } from '@/lib/mapboxToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, Navigation, Phone, User, Loader2 } from 'lucide-react';
+import { MapPin, Clock, Navigation, Phone, User, Loader2, Layers } from 'lucide-react';
 import { format } from 'date-fns';
 
 const statusColors: Record<string, string> = {
@@ -42,6 +42,7 @@ const DeliveryLiveMap = () => {
   const [selectedPartner, setSelectedPartner] = useState<DeliveryPartner | null>(null);
   const [mapboxToken] = useState<string>(getMapboxPublicToken());
   const [isLoading, setIsLoading] = useState(true);
+  const [isSatellite, setIsSatellite] = useState(false);
 
   // Subscribe to delivery partners
   useEffect(() => {
@@ -139,6 +140,16 @@ const DeliveryLiveMap = () => {
     }
   }, [selectedPartner]);
 
+  // Toggle map style
+  const toggleMapStyle = () => {
+    if (!map.current) return;
+    const newStyle = isSatellite 
+      ? 'mapbox://styles/mapbox/streets-v12' 
+      : 'mapbox://styles/mapbox/satellite-streets-v12';
+    map.current.setStyle(newStyle);
+    setIsSatellite(!isSatellite);
+  };
+
   const activePartners = partners.filter(p => p.currentLocation && p.isActive);
   const navigatingPartners = partners.filter(p => p.currentStatus === 'navigating');
 
@@ -157,6 +168,15 @@ const DeliveryLiveMap = () => {
           <Navigation className="w-3 h-3 mr-1" />
           {navigatingPartners.length} Navigating
         </Badge>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={toggleMapStyle}
+          className="bg-background/90 backdrop-blur h-6 px-2"
+        >
+          <Layers className="w-3 h-3 mr-1" />
+          {isSatellite ? 'Streets' : 'Satellite'}
+        </Button>
       </div>
 
       {/* Partners List */}
