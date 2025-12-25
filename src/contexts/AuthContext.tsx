@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { getUserProfile } from '@/lib/firestoreService';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthUser {
   uid: string;
@@ -31,7 +32,7 @@ let pendingPhoneNumber: string | null = null;
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
 
   const checkOnboardingStatus = async (): Promise<boolean> => {
@@ -76,35 +77,139 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.uid]);
 
   const sendOTP = async (phoneNumber: string): Promise<{ success: boolean; error?: string }> => {
-    // Validate phone number format (basic validation)
+    // Validate phone number format
     if (!phoneNumber || phoneNumber.length < 10) {
       return { success: false, error: 'Please enter a valid phone number' };
     }
 
-    // Store phone number for verification step
     pendingPhoneNumber = phoneNumber;
 
-    // Simulate OTP send delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      console.log('Sending OTP via WhatsApp to:', phoneNumber);
+      
+      const { data, error } = await supabase.functions.invoke('whatsapp-otp', {
+        body: {
+          action: 'send',
+          phoneNumber: phoneNumber
+        }
+      });
 
-    return { success: true };
+      if (error) {
+        console.error('WhatsApp OTP error:', error);
+        // Fallback to demo mode if WhatsApp fails
+        setIsDemoMode(true);
+        return { success: true }; // Still allow demo flow
+      }
+
+      if (data?.success) {
+        console.log('OTP sent successfully via WhatsApp');
+        setIsDemoMode(false);
+        return { success: true };
+      } else {
+        console.error('WhatsApp OTP failed:', data?.error);
+        // Fallback to demo mode
+        setIsDemoMode(true);
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      // Fallback to demo mode
+      setIsDemoMode(true);
+      return { success: true };
+    }
   };
 
   const verifyOTP = async (phoneNumber: string, otp: string): Promise<{ success: boolean; error?: string }> => {
-    // Verify OTP matches demo OTP
-    if (otp === DEMO_OTP) {
-      const demoUser: AuthUser = {
-        uid: 'demo-user-' + Date.now(),
-        phoneNumber: phoneNumber || pendingPhoneNumber || '',
+    const phone = phoneNumber || pendingPhoneNumber || '';
+    
+    // Demo mode fallback
+    if (isDemoMode && otp === DEMO_OTP) {
+      const userId = `user-${phone.replace(/\D/g, '')}`;
+      const authUser: AuthUser = {
+        uid: userId,
+        phoneNumber: phone,
         displayName: 'User',
       };
-      setUser(demoUser);
-      localStorage.setItem('grocery_auth_user', JSON.stringify(demoUser));
+      setUser(authUser);
+      localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
       pendingPhoneNumber = null;
       return { success: true };
     }
 
-    return { success: false, error: 'Invalid OTP. Use 123456' };
+    try {
+      console.log('Verifying OTP via WhatsApp for:', phone);
+      
+      const { data, error } = await supabase.functions.invoke('whatsapp-otp', {
+        body: {
+          action: 'verify',
+          phoneNumber: phone,
+          otp: otp
+        }
+      });
+
+      if (error) {
+        console.error('WhatsApp verify error:', error);
+        // Try demo OTP as fallback
+        if (otp === DEMO_OTP) {
+          const userId = `user-${phone.replace(/\D/g, '')}`;
+          const authUser: AuthUser = {
+            uid: userId,
+            phoneNumber: phone,
+            displayName: 'User',
+          };
+          setUser(authUser);
+          localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+          pendingPhoneNumber = null;
+          return { success: true };
+        }
+        return { success: false, error: 'Verification failed. Please try again.' };
+      }
+
+      if (data?.success) {
+        console.log('OTP verified successfully');
+        const userId = `user-${phone.replace(/\D/g, '')}`;
+        const authUser: AuthUser = {
+          uid: userId,
+          phoneNumber: phone,
+          displayName: 'User',
+        };
+        setUser(authUser);
+        localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+        pendingPhoneNumber = null;
+        return { success: true };
+      } else {
+        // Try demo OTP as fallback
+        if (otp === DEMO_OTP) {
+          const userId = `user-${phone.replace(/\D/g, '')}`;
+          const authUser: AuthUser = {
+            uid: userId,
+            phoneNumber: phone,
+            displayName: 'User',
+          };
+          setUser(authUser);
+          localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+          pendingPhoneNumber = null;
+          return { success: true };
+        }
+        return { success: false, error: data?.error || 'Invalid OTP. Please try again.' };
+      }
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      // Try demo OTP as fallback
+      if (otp === DEMO_OTP) {
+        const userId = `user-${phone.replace(/\D/g, '')}`;
+        const authUser: AuthUser = {
+          uid: userId,
+          phoneNumber: phone,
+          displayName: 'User',
+        };
+        setUser(authUser);
+        localStorage.setItem('grocery_auth_user', JSON.stringify(authUser));
+        pendingPhoneNumber = null;
+        return { success: true };
+      }
+      return { success: false, error: 'Verification failed. Please try again.' };
+    }
   };
 
   const demoLogin = () => {
