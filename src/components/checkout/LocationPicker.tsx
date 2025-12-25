@@ -152,34 +152,37 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
         // Add navigation controls
         map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-        // Create custom marker element with proper anchor point at tip
+        // Create custom marker element with tip pointing down
         const markerEl = document.createElement('div');
-        markerEl.style.cssText = 'width: 40px; height: 48px; position: relative;';
+        markerEl.style.cssText = 'width: 40px; height: 48px; display: flex; flex-direction: column; align-items: center;';
         markerEl.innerHTML = `
           <div style="
-            width: 40px; 
-            height: 40px; 
+            width: 36px; 
+            height: 36px; 
             background: hsl(130, 85%, 28%); 
-            border-radius: 50% 50% 50% 0; 
-            transform: rotate(-45deg);
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            position: absolute;
-            top: 0;
-            left: 0;
           ">
-            <div style="transform: rotate(45deg); color: white; font-size: 18px;">📍</div>
+            <span style="color: white; font-size: 18px;">📍</span>
           </div>
+          <div style="
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 12px solid hsl(130, 85%, 28%);
+            margin-top: -2px;
+          "></div>
         `;
 
-        // Add draggable marker with anchor at the tip (bottom-left corner after rotation)
+        // Add draggable marker with anchor at bottom (tip of the pin)
         marker.current = new mapboxgl.Marker({
           element: markerEl,
           draggable: true,
-          anchor: 'bottom-left', // Anchor at tip of the rotated pin
-          offset: [14, 6], // Fine-tune offset so tip aligns with coordinates
+          anchor: 'bottom',
         })
           .setLngLat([initialLng, initialLat])
           .addTo(map.current);
