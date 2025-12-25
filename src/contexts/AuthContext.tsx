@@ -85,9 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pendingPhoneNumber = phoneNumber;
 
     try {
-      console.log('Sending OTP via WhatsApp to:', phoneNumber);
+      console.log('Sending OTP via SMS to:', phoneNumber);
       
-      const { data, error } = await supabase.functions.invoke('whatsapp-otp', {
+      const { data, error } = await supabase.functions.invoke('sms-otp', {
         body: {
           action: 'send',
           phoneNumber: phoneNumber
@@ -95,18 +95,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error('WhatsApp OTP error:', error);
-        // Fallback to demo mode if WhatsApp fails
+        console.error('SMS OTP error:', error);
+        // Fallback to demo mode if SMS fails
         setIsDemoMode(true);
         return { success: true }; // Still allow demo flow
       }
 
       if (data?.success) {
-        console.log('OTP sent successfully via WhatsApp');
+        console.log('OTP sent successfully via SMS');
         setIsDemoMode(false);
         return { success: true };
       } else {
-        console.error('WhatsApp OTP failed:', data?.error);
+        console.error('SMS OTP failed:', data?.error);
         // Fallback to demo mode
         setIsDemoMode(true);
         return { success: true };
@@ -137,9 +137,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      console.log('Verifying OTP via WhatsApp for:', phone);
+      console.log('Verifying OTP via SMS for:', phone);
       
-      const { data, error } = await supabase.functions.invoke('whatsapp-otp', {
+      const { data, error } = await supabase.functions.invoke('sms-otp', {
         body: {
           action: 'verify',
           phoneNumber: phone,
@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error('WhatsApp verify error:', error);
+        console.error('SMS verify error:', error);
         // Try demo OTP as fallback
         if (otp === DEMO_OTP) {
           const userId = `user-${phone.replace(/\D/g, '')}`;
