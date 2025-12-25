@@ -5,15 +5,7 @@ import { useState, useEffect, useContext } from 'react';
 import { subscribeToUserOrders, Order } from '@/lib/firestoreService';
 import { AuthContext } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
-
-const formatDuration = (seconds?: number) => {
-  if (!seconds || !Number.isFinite(seconds)) return '';
-  const mins = Math.max(0, Math.round(seconds / 60));
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${mins} min`;
-};
+import { formatDuration } from '@/lib/etaService';
 
 export const DeliveryActionBar = () => {
   const authContext = useContext(AuthContext);

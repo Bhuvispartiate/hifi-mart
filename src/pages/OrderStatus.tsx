@@ -10,24 +10,9 @@ import { useNearbyDeliveryNotification } from '@/hooks/useNearbyDeliveryNotifica
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { format } from 'date-fns';
+import { formatDuration, formatDistance } from '@/lib/etaService';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
-
-const formatDuration = (seconds?: number) => {
-  if (!seconds || !Number.isFinite(seconds)) return '';
-  const mins = Math.max(0, Math.round(seconds / 60));
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${mins} min`;
-};
-
-const formatDistance = (meters?: number) => {
-  if (!meters || !Number.isFinite(meters)) return '';
-  const km = meters / 1000;
-  if (km >= 1) return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
-  return `${Math.round(meters)} m`;
-};
 
 // Status configuration with order, icons, labels, and descriptions
 const statusFlow = [
