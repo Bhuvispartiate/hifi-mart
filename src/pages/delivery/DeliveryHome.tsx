@@ -11,6 +11,7 @@ import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
 import { useFCM } from '@/hooks/useFCM';
 import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp, saveFCMToken, updateDeliveryPartnerTracking } from '@/lib/firestoreService';
+import { calculateETA, formatDuration, formatDistance } from '@/lib/etaService';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -30,20 +31,7 @@ const ROUTE_LAYER_ID = 'route-selected-layer';
 const ALT_ROUTE_LAYER_ID = 'route-alt-layer';
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
 
-const formatDuration = (seconds: number) => {
-  const mins = Math.max(0, Math.round(seconds / 60));
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h > 0) return `${h} hr ${m} min`;
-  return `${mins} min`;
-};
-
-const formatDistance = (meters: number) => {
-  if (!Number.isFinite(meters)) return '';
-  const km = meters / 1000;
-  if (km >= 1) return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
-  return `${Math.round(meters)} m`;
-};
+// Using shared formatDuration and formatDistance from etaService (imported above)
 
 // Helper to find nearest point on a route to snap marker to road
 const findNearestPointOnRoute = (
@@ -519,15 +507,59 @@ export default function DeliveryHome() {
   };
 
   const handlePickupComplete = async () => {
-    if (!currentOrder) return;
+    if (!currentOrder || !deliveryPartner?.id) return;
     
     try {
-      // Update status to "out_for_delivery" when pickup is complete
-      await updateOrderStatus(currentOrder.id, 'out_for_delivery');
+      // Get current location for ETA calculation
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
+      });
+
+      const currentPos = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+
+      // Calculate initial ETA
+      let etaUpdates: Partial<Order> = {};
+      
+      if (currentOrder.deliveryCoordinates) {
+        const eta = await calculateETA(currentPos, currentOrder.deliveryCoordinates);
+        
+        if (eta) {
+          etaUpdates = {
+            deliveryPartnerLocation: currentPos,
+            estimatedArrival: eta.estimatedArrival,
+            estimatedDuration: eta.estimatedDuration,
+            estimatedDistance: eta.estimatedDistance,
+          };
+
+          // Also update delivery partner tracking
+          await updateDeliveryPartnerTracking(deliveryPartner.id, {
+            currentLocation: currentPos,
+            estimatedArrival: eta.estimatedArrival,
+            estimatedDuration: eta.estimatedDuration,
+            estimatedDistance: eta.estimatedDistance,
+            destinationLocation: currentOrder.deliveryCoordinates,
+          });
+
+          console.log(`[ETA] Initial ETA calculated: ${eta.durationFormatted}, ${eta.distanceFormatted}`);
+        }
+      }
+
+      // Update status to "out_for_delivery" with ETA info
+      await updateOrderStatus(currentOrder.id, 'out_for_delivery', etaUpdates);
       setStatus('navigating');
       toast({ title: 'Pickup complete', description: 'Navigate to customer location' });
     } catch (error) {
-      toast({ title: 'Error updating status', variant: 'destructive' });
+      console.error('Error during pickup complete:', error);
+      // Still update status even if ETA calculation fails
+      await updateOrderStatus(currentOrder.id, 'out_for_delivery');
+      setStatus('navigating');
+      toast({ title: 'Pickup complete', description: 'Navigate to customer location' });
     }
   };
 
