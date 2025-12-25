@@ -290,6 +290,21 @@ export const updateOrderStatus = async (orderId: string, status: Order['status']
   try {
     const docRef = doc(db, 'orders', orderId);
     await updateDoc(docRef, { status, ...updates });
+    
+    // Auto-release delivery partner when order is cancelled
+    if (status === 'cancelled') {
+      const order = await getOrderById(orderId);
+      if (order?.deliveryPartnerId) {
+        const partnerRef = doc(db, 'deliveryPartners', order.deliveryPartnerId);
+        await updateDoc(partnerRef, {
+          currentOrderId: null,
+          currentStatus: 'idle',
+          lastStatusUpdate: Timestamp.now(),
+        });
+        console.log(`Released delivery partner ${order.deliveryPartnerId} due to order cancellation`);
+      }
+    }
+    
     return true;
   } catch (error) {
     console.error('Error updating order:', error);
@@ -564,6 +579,8 @@ export const seedOrders = async (orders: Array<Omit<Order, 'createdAt'> & { id: 
 
 // ============= DELIVERY PARTNERS =============
 
+export type PartnerStatus = 'idle' | 'assigned' | 'pickup' | 'navigating' | 'reached' | 'offline';
+
 export interface DeliveryPartner {
   id: string;
   name: string;
@@ -575,7 +592,10 @@ export interface DeliveryPartner {
   totalDeliveries: number;
   joinedAt: Date;
   lastDeliveryAt?: Date;
-  currentOrderId?: string;
+  currentOrderId?: string | null;
+  currentStatus: PartnerStatus;
+  lastStatusUpdate?: Date;
+  currentLocation?: { lat: number; lng: number };
 }
 
 export const getDeliveryPartners = async (): Promise<DeliveryPartner[]> => {
@@ -587,6 +607,10 @@ export const getDeliveryPartners = async (): Promise<DeliveryPartner[]> => {
         id: doc.id,
         ...data,
         joinedAt: data.joinedAt?.toDate() || new Date(),
+        lastDeliveryAt: data.lastDeliveryAt?.toDate() || undefined,
+        lastStatusUpdate: data.lastStatusUpdate?.toDate() || undefined,
+        currentStatus: data.currentStatus || 'idle',
+        currentOrderId: data.currentOrderId || null,
       } as DeliveryPartner;
     });
   } catch (error) {
@@ -600,6 +624,9 @@ export const createDeliveryPartner = async (partner: Omit<DeliveryPartner, 'id'>
     const docRef = await addDoc(collection(db, 'deliveryPartners'), {
       ...partner,
       joinedAt: Timestamp.now(),
+      currentOrderId: null,
+      currentStatus: 'idle',
+      lastStatusUpdate: Timestamp.now(),
     });
     return docRef.id;
   } catch (error) {
@@ -611,7 +638,10 @@ export const createDeliveryPartner = async (partner: Omit<DeliveryPartner, 'id'>
 export const updateDeliveryPartner = async (id: string, updates: Partial<DeliveryPartner>): Promise<boolean> => {
   try {
     const docRef = doc(db, 'deliveryPartners', id);
-    await updateDoc(docRef, updates);
+    await updateDoc(docRef, {
+      ...updates,
+      lastStatusUpdate: Timestamp.now(),
+    });
     return true;
   } catch (error) {
     console.error('Error updating delivery partner:', error);
@@ -630,13 +660,99 @@ export const deleteDeliveryPartner = async (id: string): Promise<boolean> => {
   }
 };
 
-// Get available delivery partner with oldest last delivery (for fair assignment)
+// Release a delivery partner (free them up for new orders)
+export const releaseDeliveryPartner = async (partnerId: string): Promise<boolean> => {
+  try {
+    const partnerRef = doc(db, 'deliveryPartners', partnerId);
+    await updateDoc(partnerRef, {
+      currentOrderId: null,
+      currentStatus: 'idle',
+      lastStatusUpdate: Timestamp.now(),
+    });
+    console.log(`Delivery partner ${partnerId} released and set to idle`);
+    return true;
+  } catch (error) {
+    console.error('Error releasing delivery partner:', error);
+    return false;
+  }
+};
+
+// Update partner work status
+export const updatePartnerStatus = async (partnerId: string, status: PartnerStatus): Promise<boolean> => {
+  try {
+    const partnerRef = doc(db, 'deliveryPartners', partnerId);
+    await updateDoc(partnerRef, {
+      currentStatus: status,
+      lastStatusUpdate: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating partner status:', error);
+    return false;
+  }
+};
+
+// Check if an order is still active (not delivered/cancelled)
+const isOrderActive = async (orderId: string): Promise<boolean> => {
+  try {
+    const order = await getOrderById(orderId);
+    if (!order) return false;
+    return !['delivered', 'cancelled'].includes(order.status);
+  } catch {
+    return false;
+  }
+};
+
+// Cleanup stale assignments (partners with currentOrderId pointing to completed/cancelled orders)
+export const cleanupStaleAssignments = async (): Promise<number> => {
+  try {
+    const partners = await getDeliveryPartners();
+    let cleanedCount = 0;
+
+    for (const partner of partners) {
+      if (partner.currentOrderId) {
+        const orderActive = await isOrderActive(partner.currentOrderId);
+        if (!orderActive) {
+          await releaseDeliveryPartner(partner.id);
+          console.log(`Cleaned up stale assignment for partner ${partner.name} (order ${partner.currentOrderId})`);
+          cleanedCount++;
+        }
+      }
+    }
+
+    console.log(`Cleaned up ${cleanedCount} stale partner assignments`);
+    return cleanedCount;
+  } catch (error) {
+    console.error('Error cleaning up stale assignments:', error);
+    return 0;
+  }
+};
+
+// Get available delivery partner with detailed logging
 export const getAvailableDeliveryPartner = async (): Promise<DeliveryPartner | null> => {
   try {
     const partners = await getDeliveryPartners();
     
+    console.log(`[Auto-Assign] Total partners: ${partners.length}`);
+    
+    // First cleanup any stale assignments
+    await cleanupStaleAssignments();
+    
+    // Refetch after cleanup
+    const refreshedPartners = await getDeliveryPartners();
+    
     // Filter active partners who don't have a current order
-    const availablePartners = partners.filter(p => p.isActive && !p.currentOrderId);
+    const availablePartners = refreshedPartners.filter(p => {
+      const isAvailable = p.isActive === true && 
+                          (p.currentOrderId === null || p.currentOrderId === undefined || p.currentOrderId === '') &&
+                          p.currentStatus !== 'offline';
+      
+      console.log(`[Auto-Assign] Partner "${p.name}": isActive=${p.isActive}, currentOrderId=${p.currentOrderId}, currentStatus=${p.currentStatus}, available=${isAvailable}`);
+      
+      return isAvailable;
+    });
+    
+    console.log(`[Auto-Assign] Available partners: ${availablePartners.length}`);
     
     if (availablePartners.length === 0) return null;
     
@@ -659,7 +775,7 @@ export const autoAssignDeliveryPartner = async (orderId: string): Promise<Delive
   try {
     const partner = await getAvailableDeliveryPartner();
     if (!partner) {
-      console.log('No available delivery partner for order:', orderId);
+      console.log('[Auto-Assign] No available delivery partner for order:', orderId);
       return null;
     }
 
@@ -675,13 +791,15 @@ export const autoAssignDeliveryPartner = async (orderId: string): Promise<Delive
       },
     });
 
-    // Update partner with current order
+    // Update partner with current order and status
     const partnerRef = doc(db, 'deliveryPartners', partner.id);
     await updateDoc(partnerRef, {
       currentOrderId: orderId,
+      currentStatus: 'assigned',
+      lastStatusUpdate: Timestamp.now(),
     });
 
-    console.log(`Order ${orderId} assigned to delivery partner ${partner.name}`);
+    console.log(`[Auto-Assign] Order ${orderId} assigned to delivery partner ${partner.name} (${partner.id})`);
     return partner;
   } catch (error) {
     console.error('Error auto-assigning delivery partner:', error);

@@ -4,7 +4,11 @@ import {
   createDeliveryPartner, 
   updateDeliveryPartner, 
   deleteDeliveryPartner,
-  DeliveryPartner 
+  releaseDeliveryPartner,
+  cleanupStaleAssignments,
+  getOrderById,
+  DeliveryPartner,
+  PartnerStatus
 } from '@/lib/firestoreService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,14 +39,29 @@ import {
   Truck,
   Phone,
   Star,
-  Loader2
+  Loader2,
+  Package,
+  RefreshCw,
+  UserX
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+
+type StatusFilter = 'all' | 'idle' | 'busy';
+
+const statusConfig: Record<PartnerStatus, { label: string; color: string }> = {
+  idle: { label: 'Idle', color: 'bg-muted text-muted-foreground' },
+  assigned: { label: 'Assigned', color: 'bg-primary/20 text-primary' },
+  pickup: { label: 'Pickup', color: 'bg-warning/20 text-warning' },
+  navigating: { label: 'Navigating', color: 'bg-accent/20 text-accent-foreground' },
+  reached: { label: 'Reached', color: 'bg-success/20 text-success' },
+  offline: { label: 'Offline', color: 'bg-destructive/20 text-destructive' },
+};
 
 const AdminDeliveryPartners = () => {
   const [partners, setPartners] = useState<DeliveryPartner[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPartner, setEditingPartner] = useState<DeliveryPartner | null>(null);
@@ -54,6 +73,11 @@ const AdminDeliveryPartners = () => {
     isActive: true,
   });
   const [saving, setSaving] = useState(false);
+  const [releasing, setReleasing] = useState<string | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
+
+  // Store order info for partners with assigned orders
+  const [orderInfo, setOrderInfo] = useState<Record<string, { id: string; status: string }>>({});
 
   useEffect(() => {
     loadData();
@@ -63,13 +87,35 @@ const AdminDeliveryPartners = () => {
     setLoading(true);
     const data = await getDeliveryPartners();
     setPartners(data);
+    
+    // Fetch order info for partners with current orders
+    const orderInfoMap: Record<string, { id: string; status: string }> = {};
+    for (const partner of data) {
+      if (partner.currentOrderId) {
+        const order = await getOrderById(partner.currentOrderId);
+        if (order) {
+          orderInfoMap[partner.id] = { id: order.id, status: order.status };
+        }
+      }
+    }
+    setOrderInfo(orderInfoMap);
     setLoading(false);
   };
 
-  const filteredPartners = partners.filter(partner =>
-    partner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    partner.phone.includes(searchQuery)
-  );
+  const filteredPartners = partners.filter(partner => {
+    const matchesSearch = partner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      partner.phone.includes(searchQuery);
+    
+    if (!matchesSearch) return false;
+    
+    if (statusFilter === 'idle') return !partner.currentOrderId;
+    if (statusFilter === 'busy') return !!partner.currentOrderId;
+    
+    return true;
+  });
+
+  const idleCount = partners.filter(p => p.isActive && !p.currentOrderId).length;
+  const busyCount = partners.filter(p => p.isActive && !!p.currentOrderId).length;
 
   const openCreateDialog = () => {
     setEditingPartner(null);
@@ -112,6 +158,8 @@ const AdminDeliveryPartners = () => {
           rating: 5.0,
           totalDeliveries: 0,
           joinedAt: new Date(),
+          currentStatus: 'idle',
+          currentOrderId: null,
         });
         toast({ title: 'Partner added successfully' });
       }
@@ -137,11 +185,44 @@ const AdminDeliveryPartners = () => {
 
   const toggleActive = async (partner: DeliveryPartner) => {
     try {
-      await updateDeliveryPartner(partner.id, { isActive: !partner.isActive });
+      await updateDeliveryPartner(partner.id, { 
+        isActive: !partner.isActive,
+        currentStatus: !partner.isActive ? 'idle' : 'offline'
+      });
       loadData();
     } catch (error) {
       toast({ title: 'Error updating status', variant: 'destructive' });
     }
+  };
+
+  const handleRelease = async (partner: DeliveryPartner) => {
+    if (!confirm(`Release "${partner.name}" from current order?`)) return;
+    
+    setReleasing(partner.id);
+    try {
+      await releaseDeliveryPartner(partner.id);
+      toast({ title: `${partner.name} released and available for new orders` });
+      loadData();
+    } catch (error) {
+      toast({ title: 'Error releasing partner', variant: 'destructive' });
+    }
+    setReleasing(null);
+  };
+
+  const handleCleanupStale = async () => {
+    setCleaningUp(true);
+    try {
+      const count = await cleanupStaleAssignments();
+      if (count > 0) {
+        toast({ title: `Cleaned up ${count} stale assignment(s)` });
+        loadData();
+      } else {
+        toast({ title: 'No stale assignments found' });
+      }
+    } catch (error) {
+      toast({ title: 'Error cleaning up', variant: 'destructive' });
+    }
+    setCleaningUp(false);
   };
 
   if (loading) {
@@ -150,7 +231,7 @@ const AdminDeliveryPartners = () => {
         <Skeleton className="h-10 w-64" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-40" />
+            <Skeleton key={i} className="h-48" />
           ))}
         </div>
       </div>
@@ -160,28 +241,48 @@ const AdminDeliveryPartners = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Delivery Partners</h1>
           <p className="text-muted-foreground">
-            {partners.filter(p => p.isActive).length} active / {partners.length} total
+            <span className="text-success">{idleCount} idle</span> • 
+            <span className="text-primary ml-1">{busyCount} busy</span> • 
+            <span className="ml-1">{partners.length} total</span>
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Partner
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleCleanupStale} disabled={cleaningUp}>
+            {cleaningUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            <span className="ml-2 hidden sm:inline">Cleanup Stale</span>
+          </Button>
+          <Button onClick={openCreateDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Partner
+          </Button>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name or phone..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+      {/* Filters */}
+      <div className="flex gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Filter status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Partners</SelectItem>
+            <SelectItem value="idle">Idle Only</SelectItem>
+            <SelectItem value="busy">Busy Only</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Partners Grid */}
@@ -194,64 +295,108 @@ const AdminDeliveryPartners = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredPartners.map((partner) => (
-            <Card key={partner.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Truck className="h-6 w-6 text-primary" />
+          {filteredPartners.map((partner) => {
+            const status = statusConfig[partner.currentStatus] || statusConfig.idle;
+            const hasOrder = !!partner.currentOrderId;
+            const order = orderInfo[partner.id];
+            
+            return (
+              <Card key={partner.id} className={hasOrder ? 'border-primary/50' : ''}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${hasOrder ? 'bg-primary/20' : 'bg-muted'}`}>
+                        <Truck className={`h-6 w-6 ${hasOrder ? 'text-primary' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{partner.name}</h3>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          {partner.phone}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">{partner.name}</h3>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        {partner.phone}
-                      </p>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant={partner.isActive ? 'default' : 'secondary'}>
+                        {partner.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                      <Badge className={status.color} variant="outline">
+                        {status.label}
+                      </Badge>
                     </div>
                   </div>
-                  <Badge variant={partner.isActive ? 'default' : 'secondary'}>
-                    {partner.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                  <span className="flex items-center gap-1">
-                    <Star className="h-4 w-4 text-warning fill-warning" />
-                    {partner.rating.toFixed(1)}
-                  </span>
-                  <span>{partner.totalDeliveries} deliveries</span>
-                  <span className="capitalize">{partner.vehicleType}</span>
-                </div>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => openEditDialog(partner)}
-                  >
-                    <Edit className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => toggleActive(partner)}
-                  >
-                    {partner.isActive ? 'Deactivate' : 'Activate'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleDelete(partner)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  
+                  {/* Current Order Info */}
+                  {hasOrder && (
+                    <div className="bg-muted/50 rounded-lg p-3 mb-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Package className="h-4 w-4 text-primary" />
+                        <span className="font-medium">Current Order:</span>
+                        <span className="text-muted-foreground font-mono text-xs">
+                          {partner.currentOrderId?.slice(0, 8)}...
+                        </span>
+                      </div>
+                      {order && (
+                        <p className="text-xs text-muted-foreground mt-1 ml-6">
+                          Status: <span className="capitalize">{order.status.replace('_', ' ')}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
+                    <span className="flex items-center gap-1">
+                      <Star className="h-4 w-4 text-warning fill-warning" />
+                      {partner.rating.toFixed(1)}
+                    </span>
+                    <span>{partner.totalDeliveries} deliveries</span>
+                    <span className="capitalize">{partner.vehicleType}</span>
+                  </div>
+                  
+                  <div className="flex gap-2 flex-wrap">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => openEditDialog(partner)}
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => toggleActive(partner)}
+                    >
+                      {partner.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                    {hasOrder && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleRelease(partner)}
+                        disabled={releasing === partner.id}
+                        className="text-warning border-warning/50 hover:bg-warning/10"
+                      >
+                        {releasing === partner.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <UserX className="h-4 w-4 mr-1" />
+                        )}
+                        Release
+                      </Button>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDelete(partner)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
