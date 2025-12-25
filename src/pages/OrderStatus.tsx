@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useRealtimeOrder } from '@/hooks/useRealtimeOrders';
+import { useNearbyDeliveryNotification } from '@/hooks/useNearbyDeliveryNotification';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { format } from 'date-fns';
@@ -72,6 +73,7 @@ const OrderStatus = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { order, loading } = useRealtimeOrder(orderId || null);
+  const { isNearby } = useNearbyDeliveryNotification(order);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
