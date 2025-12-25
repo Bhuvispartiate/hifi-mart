@@ -30,7 +30,7 @@ export const initGeofenceListener = (callback?: (config: GeofenceConfig) => void
   if (unsubscribe) return; // Already listening
 
   const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
-  unsubscribe = onSnapshot(docRef, (docSnap) => {
+  unsubscribe = onSnapshot(docRef, async (docSnap) => {
     if (docSnap.exists()) {
       const data = docSnap.data();
       cachedConfig = {
@@ -40,6 +40,16 @@ export const initGeofenceListener = (callback?: (config: GeofenceConfig) => void
         updatedAt: data.updatedAt?.toDate(),
       };
     } else {
+      // Document doesn't exist - create it with default values
+      console.log('Geofence config not found in listener, creating default...');
+      try {
+        await setDoc(docRef, {
+          ...DEFAULT_GEOFENCE,
+          updatedAt: Timestamp.now(),
+        });
+      } catch (error) {
+        console.error('Error creating default geofence config:', error);
+      }
       cachedConfig = DEFAULT_GEOFENCE;
     }
     callback?.(cachedConfig);
@@ -62,11 +72,12 @@ export const getGeofenceConfig = (): GeofenceConfig => {
   return cachedConfig || DEFAULT_GEOFENCE;
 };
 
-// Get geofence config from Firestore (async)
+// Get geofence config from Firestore (async) - creates default if doesn't exist
 export const fetchGeofenceConfig = async (): Promise<GeofenceConfig> => {
   try {
     const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
     const docSnap = await getDoc(docRef);
+    
     if (docSnap.exists()) {
       const data = docSnap.data();
       cachedConfig = {
@@ -75,6 +86,15 @@ export const fetchGeofenceConfig = async (): Promise<GeofenceConfig> => {
         radiusKm: data.radiusKm,
         updatedAt: data.updatedAt?.toDate(),
       };
+      return cachedConfig;
+    } else {
+      // Document doesn't exist - create it with default values
+      console.log('Geofence config not found, creating default...');
+      await setDoc(docRef, {
+        ...DEFAULT_GEOFENCE,
+        updatedAt: Timestamp.now(),
+      });
+      cachedConfig = DEFAULT_GEOFENCE;
       return cachedConfig;
     }
   } catch (error) {
