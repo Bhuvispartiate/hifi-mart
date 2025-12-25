@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { DeliveryPartner, subscribeToDeliveryPartners } from '@/lib/firestoreService';
-import { getMapboxPublicToken, setMapboxPublicToken } from '@/lib/mapboxToken';
-import { Input } from '@/components/ui/input';
+import { getMapboxPublicToken } from '@/lib/mapboxToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,8 +40,7 @@ const DeliveryLiveMap = () => {
   
   const [partners, setPartners] = useState<DeliveryPartner[]>([]);
   const [selectedPartner, setSelectedPartner] = useState<DeliveryPartner | null>(null);
-  const [mapboxToken, setToken] = useState<string | undefined>(getMapboxPublicToken());
-  const [tokenInput, setTokenInput] = useState('');
+  const [mapboxToken] = useState<string>(getMapboxPublicToken());
   const [isLoading, setIsLoading] = useState(true);
 
   // Subscribe to delivery partners
@@ -141,44 +139,8 @@ const DeliveryLiveMap = () => {
     }
   }, [selectedPartner]);
 
-  const handleSaveToken = () => {
-    if (tokenInput.trim()) {
-      setMapboxPublicToken(tokenInput.trim());
-      setToken(tokenInput.trim());
-    }
-  };
-
   const activePartners = partners.filter(p => p.currentLocation && p.isActive);
   const navigatingPartners = partners.filter(p => p.currentStatus === 'navigating');
-
-  if (!mapboxToken) {
-    return (
-      <div className="flex items-center justify-center h-full p-8">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <CardTitle>Mapbox Token Required</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Enter your Mapbox public token to enable the live tracking map.
-              Get your token from{' '}
-              <a href="https://mapbox.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                mapbox.com
-              </a>
-            </p>
-            <Input
-              placeholder="pk.eyJ1..."
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-            />
-            <Button onClick={handleSaveToken} className="w-full">
-              Save Token
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="relative h-full w-full">
