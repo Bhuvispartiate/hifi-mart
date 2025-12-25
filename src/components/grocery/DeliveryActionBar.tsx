@@ -1,9 +1,19 @@
-import { Package, Clock, MapPin, Truck } from 'lucide-react';
+import { Package, Clock, MapPin, Truck, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useContext } from 'react';
 import { subscribeToUserOrders, Order } from '@/lib/firestoreService';
 import { AuthContext } from '@/contexts/AuthContext';
+import { format } from 'date-fns';
+
+const formatDuration = (seconds?: number) => {
+  if (!seconds || !Number.isFinite(seconds)) return '';
+  const mins = Math.max(0, Math.round(seconds / 60));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${mins} min`;
+};
 
 export const DeliveryActionBar = () => {
   const authContext = useContext(AuthContext);
@@ -54,6 +64,9 @@ export const DeliveryActionBar = () => {
   const config = statusConfig[activeOrder.status] || statusConfig.confirmed;
   const Icon = config.icon;
 
+  // Show ETA if available for out_for_delivery
+  const showEta = activeOrder.status === 'out_for_delivery' && activeOrder.estimatedArrival;
+
   return (
     <div className="fixed bottom-16 left-0 right-0 z-40 px-3 pb-2 safe-area-pb">
       <div className={`${config.color} rounded-2xl shadow-lg overflow-hidden`}>
@@ -65,9 +78,21 @@ export const DeliveryActionBar = () => {
             <p className="text-sm font-semibold text-primary-foreground">
               {config.text}
             </p>
-            <p className="text-xs text-primary-foreground/80">
-              {activeOrder.items.length} items • ₹{activeOrder.total}
-            </p>
+            {showEta ? (
+              <div className="flex items-center gap-1 text-xs text-primary-foreground/90">
+                <Clock className="w-3 h-3" />
+                <span>
+                  Arriving {format(activeOrder.estimatedArrival!, 'h:mm a')}
+                  {activeOrder.estimatedDuration && (
+                    <span className="ml-1">({formatDuration(activeOrder.estimatedDuration)})</span>
+                  )}
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-primary-foreground/80">
+                {activeOrder.items.length} items • ₹{activeOrder.total}
+              </p>
+            )}
           </div>
           <Link to={`/order/${activeOrder.id}`}>
             <Button

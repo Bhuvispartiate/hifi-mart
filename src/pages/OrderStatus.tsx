@@ -8,8 +8,25 @@ import { Separator } from '@/components/ui/separator';
 import { useRealtimeOrder } from '@/hooks/useRealtimeOrders';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { format } from 'date-fns';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
+
+const formatDuration = (seconds?: number) => {
+  if (!seconds || !Number.isFinite(seconds)) return '';
+  const mins = Math.max(0, Math.round(seconds / 60));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${mins} min`;
+};
+
+const formatDistance = (meters?: number) => {
+  if (!meters || !Number.isFinite(meters)) return '';
+  const km = meters / 1000;
+  if (km >= 1) return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+  return `${Math.round(meters)} m`;
+};
 
 // Status configuration with order, icons, labels, and descriptions
 const statusFlow = [
@@ -239,12 +256,35 @@ const OrderStatus = () => {
                   <Navigation className="h-6 w-6 text-primary animate-pulse" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">
-                    {order.eta ? 'Arriving in' : 'On the way'}
-                  </p>
-                  <p className="text-xl font-bold text-foreground">
-                    {order.eta || 'Soon'}
-                  </p>
+                  {order.estimatedArrival ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">Arriving at</p>
+                      <p className="text-xl font-bold text-foreground">
+                        {format(order.estimatedArrival, 'h:mm a')}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                        {order.estimatedDuration && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatDuration(order.estimatedDuration)}
+                          </span>
+                        )}
+                        {order.estimatedDistance && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {formatDistance(order.estimatedDistance)} away
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">On the way</p>
+                      <p className="text-xl font-bold text-foreground">
+                        {order.eta || 'Soon'}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
               <Badge className="bg-primary text-primary-foreground">Live</Badge>

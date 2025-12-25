@@ -109,6 +109,11 @@ export interface Order {
   createdAt: Date;
   deliveryOtp?: string;
   otpGeneratedAt?: Date;
+  // Real-time tracking fields
+  estimatedArrival?: Date;
+  estimatedDuration?: number; // seconds
+  estimatedDistance?: number; // meters
+  deliveryPartnerLocation?: { lat: number; lng: number };
 }
 
 export interface UserAddress {
@@ -596,7 +601,64 @@ export interface DeliveryPartner {
   currentStatus: PartnerStatus;
   lastStatusUpdate?: Date;
   currentLocation?: { lat: number; lng: number };
+  lastLocationUpdate?: Date;
+  // ETA tracking fields
+  estimatedArrival?: Date;
+  estimatedDuration?: number; // seconds
+  estimatedDistance?: number; // meters
+  destinationLocation?: { lat: number; lng: number };
 }
+
+// Update delivery partner location and ETA
+export const updateDeliveryPartnerTracking = async (
+  partnerId: string,
+  data: {
+    currentLocation: { lat: number; lng: number };
+    estimatedArrival?: Date;
+    estimatedDuration?: number;
+    estimatedDistance?: number;
+    destinationLocation?: { lat: number; lng: number };
+  }
+): Promise<boolean> => {
+  try {
+    const partnerRef = doc(db, 'deliveryPartners', partnerId);
+    await updateDoc(partnerRef, {
+      currentLocation: data.currentLocation,
+      lastLocationUpdate: Timestamp.now(),
+      ...(data.estimatedArrival && { estimatedArrival: Timestamp.fromDate(data.estimatedArrival) }),
+      ...(data.estimatedDuration !== undefined && { estimatedDuration: data.estimatedDuration }),
+      ...(data.estimatedDistance !== undefined && { estimatedDistance: data.estimatedDistance }),
+      ...(data.destinationLocation && { destinationLocation: data.destinationLocation }),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating delivery partner tracking:', error);
+    return false;
+  }
+};
+
+// Subscribe to all delivery partners for real-time tracking
+export const subscribeToDeliveryPartners = (
+  callback: (partners: DeliveryPartner[]) => void
+): (() => void) => {
+  return onSnapshot(collection(db, 'deliveryPartners'), (snapshot) => {
+    const partners = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        joinedAt: data.joinedAt?.toDate() || new Date(),
+        lastDeliveryAt: data.lastDeliveryAt?.toDate() || undefined,
+        lastStatusUpdate: data.lastStatusUpdate?.toDate() || undefined,
+        lastLocationUpdate: data.lastLocationUpdate?.toDate() || undefined,
+        estimatedArrival: data.estimatedArrival?.toDate() || undefined,
+        currentStatus: data.currentStatus || 'idle',
+        currentOrderId: data.currentOrderId || null,
+      } as DeliveryPartner;
+    });
+    callback(partners);
+  });
+};
 
 export const getDeliveryPartners = async (): Promise<DeliveryPartner[]> => {
   try {

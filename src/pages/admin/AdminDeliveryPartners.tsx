@@ -7,6 +7,7 @@ import {
   releaseDeliveryPartner,
   cleanupStaleAssignments,
   getOrderById,
+  subscribeToDeliveryPartners,
   DeliveryPartner,
   PartnerStatus
 } from '@/lib/firestoreService';
@@ -42,19 +43,38 @@ import {
   Loader2,
   Package,
   RefreshCw,
-  UserX
+  UserX,
+  Clock,
+  Navigation
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 type StatusFilter = 'all' | 'idle' | 'busy';
 
-const statusConfig: Record<PartnerStatus, { label: string; color: string }> = {
+const statusConfig: Record<PartnerStatus, { label: string; color: string; icon?: typeof Truck }> = {
   idle: { label: 'Idle', color: 'bg-muted text-muted-foreground' },
   assigned: { label: 'Assigned', color: 'bg-primary/20 text-primary' },
   pickup: { label: 'Pickup', color: 'bg-warning/20 text-warning' },
-  navigating: { label: 'Navigating', color: 'bg-accent/20 text-accent-foreground' },
+  navigating: { label: 'Navigating', color: 'bg-accent/20 text-accent-foreground', icon: Navigation },
   reached: { label: 'Reached', color: 'bg-success/20 text-success' },
   offline: { label: 'Offline', color: 'bg-destructive/20 text-destructive' },
+};
+
+const formatDuration = (seconds?: number) => {
+  if (!seconds || !Number.isFinite(seconds)) return '';
+  const mins = Math.max(0, Math.round(seconds / 60));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${mins}m`;
+};
+
+const formatDistance = (meters?: number) => {
+  if (!meters || !Number.isFinite(meters)) return '';
+  const km = meters / 1000;
+  if (km >= 1) return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+  return `${Math.round(meters)} m`;
 };
 
 const AdminDeliveryPartners = () => {
@@ -80,7 +100,25 @@ const AdminDeliveryPartners = () => {
   const [orderInfo, setOrderInfo] = useState<Record<string, { id: string; status: string }>>({});
 
   useEffect(() => {
-    loadData();
+    // Use real-time subscription for live updates
+    const unsubscribe = subscribeToDeliveryPartners(async (data) => {
+      setPartners(data);
+      
+      // Fetch order info for partners with current orders
+      const orderInfoMap: Record<string, { id: string; status: string }> = {};
+      for (const partner of data) {
+        if (partner.currentOrderId) {
+          const order = await getOrderById(partner.currentOrderId);
+          if (order) {
+            orderInfoMap[partner.id] = { id: order.id, status: order.status };
+          }
+        }
+      }
+      setOrderInfo(orderInfoMap);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const loadData = async () => {
@@ -326,7 +364,7 @@ const AdminDeliveryPartners = () => {
                     </div>
                   </div>
                   
-                  {/* Current Order Info */}
+                  {/* Current Order Info with ETA */}
                   {hasOrder && (
                     <div className="bg-muted/50 rounded-lg p-3 mb-3">
                       <div className="flex items-center gap-2 text-sm">
@@ -340,6 +378,31 @@ const AdminDeliveryPartners = () => {
                         <p className="text-xs text-muted-foreground mt-1 ml-6">
                           Status: <span className="capitalize">{order.status.replace('_', ' ')}</span>
                         </p>
+                      )}
+                      {/* ETA Display for navigating partners */}
+                      {partner.currentStatus === 'navigating' && partner.estimatedArrival && (
+                        <div className="flex items-center gap-2 mt-2 ml-6 text-sm">
+                          <Clock className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-foreground font-medium">
+                            ETA: {format(partner.estimatedArrival, 'h:mm a')}
+                          </span>
+                          {partner.estimatedDuration && (
+                            <span className="text-muted-foreground">
+                              ({formatDuration(partner.estimatedDuration)})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {partner.currentStatus === 'navigating' && partner.estimatedDistance && (
+                        <div className="flex items-center gap-2 mt-1 ml-6 text-xs text-muted-foreground">
+                          <Navigation className="h-3 w-3" />
+                          <span>{formatDistance(partner.estimatedDistance)} away</span>
+                          {partner.lastLocationUpdate && (
+                            <span className="opacity-70">
+                              • Updated {format(partner.lastLocationUpdate, 'h:mm:ss a')}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
