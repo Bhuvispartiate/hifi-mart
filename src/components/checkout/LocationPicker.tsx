@@ -4,7 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Navigation, X, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { getGeofenceConfig, isWithinGeofence, getDistanceFromCenter, fetchGeofenceConfig, GeofenceConfig } from '@/lib/geofencing';
+import { useGeofence } from '@/contexts/GeofenceContext';
 
 interface LocationPickerProps {
   open: boolean;
@@ -20,6 +20,8 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
   const map = useRef<mapboxgl.Map | null>(null);
   const marker = useRef<mapboxgl.Marker | null>(null);
   
+  const { config: geofenceConfig, isWithinZone, getDistanceFromStore } = useGeofence();
+  
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [address, setAddress] = useState('');
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
@@ -27,7 +29,6 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
   const [mapLoaded, setMapLoaded] = useState(false);
   const [isOutsideZone, setIsOutsideZone] = useState(false);
   const [distanceFromStore, setDistanceFromStore] = useState<number | null>(null);
-  const [geofenceConfig, setGeofenceConfig] = useState<GeofenceConfig | null>(null);
 
   // Helper function to generate circle coordinates for geofence visualization
   const createGeoJSONCircle = (center: [number, number], radiusKm: number, points: number = 64) => {
@@ -80,8 +81,8 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
         (position) => {
         const { latitude, longitude } = position.coords;
           setSelectedLocation({ lat: latitude, lng: longitude });
-          setIsOutsideZone(!isWithinGeofence(latitude, longitude));
-          setDistanceFromStore(getDistanceFromCenter(latitude, longitude));
+          setIsOutsideZone(!isWithinZone(latitude, longitude));
+          setDistanceFromStore(getDistanceFromStore(latitude, longitude));
           
           if (map.current) {
             map.current.flyTo({
@@ -114,12 +115,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
     }
   }, [fetchAddress]);
 
-  // Fetch geofence config when dialog opens
-  useEffect(() => {
-    if (open) {
-      fetchGeofenceConfig().then(setGeofenceConfig);
-    }
-  }, [open]);
+  // No longer need to fetch geofence config - it comes from context
 
   // Initialize map when dialog opens and geofence config is loaded
   useEffect(() => {
@@ -187,8 +183,8 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
           const lngLat = marker.current?.getLngLat();
           if (lngLat) {
             setSelectedLocation({ lat: lngLat.lat, lng: lngLat.lng });
-            setIsOutsideZone(!isWithinGeofence(lngLat.lat, lngLat.lng));
-            setDistanceFromStore(getDistanceFromCenter(lngLat.lat, lngLat.lng));
+            setIsOutsideZone(!isWithinZone(lngLat.lat, lngLat.lng));
+            setDistanceFromStore(getDistanceFromStore(lngLat.lat, lngLat.lng));
             fetchAddress(lngLat.lat, lngLat.lng);
           }
         });
@@ -198,8 +194,8 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
           const { lng, lat } = e.lngLat;
           marker.current?.setLngLat([lng, lat]);
           setSelectedLocation({ lat, lng });
-          setIsOutsideZone(!isWithinGeofence(lat, lng));
-          setDistanceFromStore(getDistanceFromCenter(lat, lng));
+          setIsOutsideZone(!isWithinZone(lat, lng));
+          setDistanceFromStore(getDistanceFromStore(lat, lng));
           fetchAddress(lat, lng);
         });
 

@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { getUserAddresses, UserAddress } from '@/lib/userProfile';
 import { createOrder as createFirestoreOrder } from '@/lib/firestoreService';
 import { LocationPicker } from '@/components/checkout/LocationPicker';
-import { isWithinGeofence, getDistanceFromCenter, fetchGeofenceConfig, GeofenceConfig } from '@/lib/geofencing';
+import { useGeofence } from '@/contexts/GeofenceContext';
 
 const paymentMethods = [
   { id: 'cod', label: 'Cash on Delivery', icon: Banknote, description: 'Pay when delivered' },
@@ -39,6 +39,8 @@ const Checkout = () => {
   const { user } = useAuth();
   const { items, totalPrice, deliveryFee, clearCart, updateQuantity } = useCart();
   const { toast } = useToast();
+  const { config: geofenceConfig, isWithinZone, getDistanceFromStore } = useGeofence();
+  
   const [selectedAddress, setSelectedAddress] = useState<string>('');
   const [selectedPayment, setSelectedPayment] = useState('cod');
   const [couponCode, setCouponCode] = useState('');
@@ -50,26 +52,20 @@ const Checkout = () => {
   const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [isOutsideDeliveryZone, setIsOutsideDeliveryZone] = useState(false);
   const [distanceFromCenter, setDistanceFromCenter] = useState<number | null>(null);
-  const [geofenceConfig, setGeofenceConfig] = useState<GeofenceConfig | null>(null);
 
   const grandTotal = totalPrice + deliveryFee - discount;
 
-  // Fetch geofence config on mount
-  useEffect(() => {
-    fetchGeofenceConfig().then(setGeofenceConfig);
-  }, []);
-
-  // Check if location is within delivery zone
+  // Check if location is within delivery zone (reactive to geofence config changes)
   useEffect(() => {
     if (pinnedLocation) {
-      const withinZone = isWithinGeofence(pinnedLocation.lat, pinnedLocation.lng);
+      const withinZone = isWithinZone(pinnedLocation.lat, pinnedLocation.lng);
       setIsOutsideDeliveryZone(!withinZone);
-      setDistanceFromCenter(getDistanceFromCenter(pinnedLocation.lat, pinnedLocation.lng));
+      setDistanceFromCenter(getDistanceFromStore(pinnedLocation.lat, pinnedLocation.lng));
     } else {
       setIsOutsideDeliveryZone(false);
       setDistanceFromCenter(null);
     }
-  }, [pinnedLocation]);
+  }, [pinnedLocation, geofenceConfig, isWithinZone, getDistanceFromStore]);
 
   // Load user addresses from Firestore
   useEffect(() => {

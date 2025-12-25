@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "@/contexts/CartContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LocationProvider } from "@/contexts/LocationContext";
+import { GeofenceProvider } from "@/contexts/GeofenceContext";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { DeliveryAuthProvider } from "@/contexts/DeliveryAuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -56,7 +57,8 @@ const App = () => (
         <AdminAuthProvider>
           <DeliveryAuthProvider>
             <LocationProvider>
-              <CartProvider>
+              <GeofenceProvider>
+                <CartProvider>
                 <Toaster />
                 <Sonner />
                 <BrowserRouter>
@@ -172,7 +174,8 @@ const App = () => (
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </BrowserRouter>
-              </CartProvider>
+                </CartProvider>
+              </GeofenceProvider>
             </LocationProvider>
           </DeliveryAuthProvider>
         </AdminAuthProvider>
