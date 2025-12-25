@@ -4,7 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Navigation, X, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { getGeofenceConfig, isWithinGeofence, getDistanceFromCenter } from '@/lib/geofencing';
+import { getGeofenceConfig, isWithinGeofence, getDistanceFromCenter, fetchGeofenceConfig, GeofenceConfig } from '@/lib/geofencing';
 
 interface LocationPickerProps {
   open: boolean;
@@ -27,6 +27,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
   const [mapLoaded, setMapLoaded] = useState(false);
   const [isOutsideZone, setIsOutsideZone] = useState(false);
   const [distanceFromStore, setDistanceFromStore] = useState<number | null>(null);
+  const [geofenceConfig, setGeofenceConfig] = useState<GeofenceConfig | null>(null);
 
   // Helper function to generate circle coordinates for geofence visualization
   const createGeoJSONCircle = (center: [number, number], radiusKm: number, points: number = 64) => {
@@ -113,7 +114,14 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
     }
   }, [fetchAddress]);
 
-  // Initialize map when dialog opens
+  // Fetch geofence config when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchGeofenceConfig().then(setGeofenceConfig);
+    }
+  }, [open]);
+
+  // Initialize map when dialog opens and geofence config is loaded
   useEffect(() => {
     if (!open) {
       // Cleanup when dialog closes
@@ -125,6 +133,8 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
       }
       return;
     }
+
+    if (!geofenceConfig) return; // Wait for geofence config
 
     // Small delay to ensure the container is rendered
     const initTimeout = setTimeout(() => {
@@ -197,8 +207,8 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
         map.current.on('load', () => {
           setMapLoaded(true);
           
-          // Add geofence circle visualization
-          const geofenceConfig = getGeofenceConfig();
+          // Add geofence circle visualization (use the config from state)
+          if (!geofenceConfig) return;
           const circleData = createGeoJSONCircle(
             [geofenceConfig.centerLng, geofenceConfig.centerLat],
             geofenceConfig.radiusKm
@@ -266,7 +276,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
     return () => {
       clearTimeout(initTimeout);
     };
-  }, [open, initialLocation, getCurrentLocation, fetchAddress]);
+  }, [open, initialLocation, getCurrentLocation, fetchAddress, geofenceConfig]);
 
   const handleConfirmLocation = () => {
     if (selectedLocation && address) {
