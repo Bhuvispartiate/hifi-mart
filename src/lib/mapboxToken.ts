@@ -1,11 +1,14 @@
 const STORAGE_KEY = 'mapbox_public_token';
 
-export const getMapboxPublicToken = (): string | undefined => {
+// Default Mapbox public token
+export const DEFAULT_MAPBOX_TOKEN = 'pk.eyJ1IjoiYmh1dmlzcGFydGlhdGUxOCIsImEiOiJjbWppdW9pMGYwaDEzM2pweWQ2YzhlcXQ5In0.raKFyGQP-n51RDUejCyVnA';
+
+export const getMapboxPublicToken = (): string => {
   try {
     const token = localStorage.getItem(STORAGE_KEY);
-    return token || undefined;
+    return token || DEFAULT_MAPBOX_TOKEN;
   } catch {
-    return undefined;
+    return DEFAULT_MAPBOX_TOKEN;
   }
 };
 
