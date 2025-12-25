@@ -4,7 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Navigation, X, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { getGeofenceConfig, isWithinGeofence } from '@/lib/geofencing';
+import { getGeofenceConfig, isWithinGeofence, getDistanceFromCenter } from '@/lib/geofencing';
 
 interface LocationPickerProps {
   open: boolean;
@@ -26,6 +26,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [isOutsideZone, setIsOutsideZone] = useState(false);
+  const [distanceFromStore, setDistanceFromStore] = useState<number | null>(null);
 
   // Helper function to generate circle coordinates for geofence visualization
   const createGeoJSONCircle = (center: [number, number], radiusKm: number, points: number = 64) => {
@@ -79,6 +80,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
         const { latitude, longitude } = position.coords;
           setSelectedLocation({ lat: latitude, lng: longitude });
           setIsOutsideZone(!isWithinGeofence(latitude, longitude));
+          setDistanceFromStore(getDistanceFromCenter(latitude, longitude));
           
           if (map.current) {
             map.current.flyTo({
@@ -176,6 +178,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
           if (lngLat) {
             setSelectedLocation({ lat: lngLat.lat, lng: lngLat.lng });
             setIsOutsideZone(!isWithinGeofence(lngLat.lat, lngLat.lng));
+            setDistanceFromStore(getDistanceFromCenter(lngLat.lat, lngLat.lng));
             fetchAddress(lngLat.lat, lngLat.lng);
           }
         });
@@ -186,6 +189,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
           marker.current?.setLngLat([lng, lat]);
           setSelectedLocation({ lat, lng });
           setIsOutsideZone(!isWithinGeofence(lat, lng));
+          setDistanceFromStore(getDistanceFromCenter(lat, lng));
           fetchAddress(lat, lng);
         });
 
@@ -340,9 +344,18 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${isOutsideZone ? 'text-destructive' : 'text-foreground'}`}>
-                  {isOutsideZone ? 'Outside Delivery Zone' : 'Delivery Location'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className={`font-medium text-sm ${isOutsideZone ? 'text-destructive' : 'text-foreground'}`}>
+                    {isOutsideZone ? 'Outside Delivery Zone' : 'Delivery Location'}
+                  </p>
+                  {distanceFromStore !== null && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${isOutsideZone ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
+                      {distanceFromStore < 1 
+                        ? `${Math.round(distanceFromStore * 1000)}m from store` 
+                        : `${distanceFromStore.toFixed(1)} km from store`}
+                    </span>
+                  )}
+                </div>
                 {isLoadingAddress ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="w-3 h-3 animate-spin" />
