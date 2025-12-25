@@ -32,11 +32,20 @@ serve(async (req) => {
 
   try {
     const WHATSAPP_API_KEY = Deno.env.get('WHATSAPP_API_KEY');
+    const WHATSAPP_PHONE_NUMBER_ID = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
     
     if (!WHATSAPP_API_KEY) {
       console.error('Missing WHATSAPP_API_KEY');
       return new Response(
         JSON.stringify({ error: 'WhatsApp API not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!WHATSAPP_PHONE_NUMBER_ID) {
+      console.error('Missing WHATSAPP_PHONE_NUMBER_ID');
+      return new Response(
+        JSON.stringify({ error: 'WhatsApp Phone Number ID not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -66,9 +75,7 @@ serve(async (req) => {
       console.log(`Generated OTP ${otp} for ${cleanedPhone}`);
 
       // Send OTP via WhatsApp Business API (Cloud API)
-      // The phone number ID should be extracted from the API key or configured separately
-      // For now, we'll use the standard Graph API endpoint
-      const whatsappUrl = 'https://graph.facebook.com/v21.0/me/messages';
+      const whatsappUrl = `https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
       
       const messagePayload = {
         messaging_product: 'whatsapp',
