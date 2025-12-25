@@ -2,10 +2,14 @@
 // Center point: 13.308798940760282, 80.17290657335155
 // Default radius: 5 KM
 
+import { db } from './firebase';
+import { doc, getDoc, setDoc, onSnapshot, Timestamp } from 'firebase/firestore';
+
 export interface GeofenceConfig {
   centerLat: number;
   centerLng: number;
   radiusKm: number;
+  updatedAt?: Date;
 }
 
 // Default geofence configuration
@@ -15,34 +19,135 @@ const DEFAULT_GEOFENCE: GeofenceConfig = {
   radiusKm: 5,
 };
 
-const GEOFENCE_STORAGE_KEY = 'geofence_config';
+const GEOFENCE_DOC_ID = 'geofence_settings';
 
-// Get current geofence configuration
+// In-memory cache for geofence config
+let cachedConfig: GeofenceConfig | null = null;
+let unsubscribe: (() => void) | null = null;
+
+// Initialize real-time listener for geofence changes
+export const initGeofenceListener = (callback?: (config: GeofenceConfig) => void): void => {
+  if (unsubscribe) return; // Already listening
+
+  const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
+  unsubscribe = onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      cachedConfig = {
+        centerLat: data.centerLat,
+        centerLng: data.centerLng,
+        radiusKm: data.radiusKm,
+        updatedAt: data.updatedAt?.toDate(),
+      };
+    } else {
+      cachedConfig = DEFAULT_GEOFENCE;
+    }
+    callback?.(cachedConfig);
+  }, (error) => {
+    console.error('Error listening to geofence config:', error);
+    cachedConfig = DEFAULT_GEOFENCE;
+  });
+};
+
+// Stop listening to geofence changes
+export const stopGeofenceListener = (): void => {
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
+};
+
+// Get current geofence configuration (sync - uses cache)
 export const getGeofenceConfig = (): GeofenceConfig => {
+  return cachedConfig || DEFAULT_GEOFENCE;
+};
+
+// Get geofence config from Firestore (async)
+export const fetchGeofenceConfig = async (): Promise<GeofenceConfig> => {
   try {
-    const stored = localStorage.getItem(GEOFENCE_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
+    const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      cachedConfig = {
+        centerLat: data.centerLat,
+        centerLng: data.centerLng,
+        radiusKm: data.radiusKm,
+        updatedAt: data.updatedAt?.toDate(),
+      };
+      return cachedConfig;
     }
   } catch (error) {
-    console.error('Error reading geofence config:', error);
+    console.error('Error fetching geofence config:', error);
   }
   return DEFAULT_GEOFENCE;
 };
 
 // Update geofence radius (admin only)
-export const updateGeofenceRadius = (radiusKm: number): void => {
-  const config = getGeofenceConfig();
-  config.radiusKm = radiusKm;
-  localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(config));
+export const updateGeofenceRadius = async (radiusKm: number): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
+    const currentConfig = await fetchGeofenceConfig();
+    await setDoc(docRef, {
+      ...currentConfig,
+      radiusKm,
+      updatedAt: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating geofence radius:', error);
+    return false;
+  }
 };
 
 // Update geofence center (admin only)
-export const updateGeofenceCenter = (lat: number, lng: number): void => {
-  const config = getGeofenceConfig();
-  config.centerLat = lat;
-  config.centerLng = lng;
-  localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(config));
+export const updateGeofenceCenter = async (lat: number, lng: number): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
+    const currentConfig = await fetchGeofenceConfig();
+    await setDoc(docRef, {
+      ...currentConfig,
+      centerLat: lat,
+      centerLng: lng,
+      updatedAt: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating geofence center:', error);
+    return false;
+  }
+};
+
+// Update full geofence config (admin only)
+export const updateGeofenceConfig = async (config: Partial<GeofenceConfig>): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
+    const currentConfig = await fetchGeofenceConfig();
+    await setDoc(docRef, {
+      ...currentConfig,
+      ...config,
+      updatedAt: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating geofence config:', error);
+    return false;
+  }
+};
+
+// Reset to default geofence (admin only)
+export const resetGeofenceToDefault = async (): Promise<boolean> => {
+  try {
+    const docRef = doc(db, 'settings', GEOFENCE_DOC_ID);
+    await setDoc(docRef, {
+      ...DEFAULT_GEOFENCE,
+      updatedAt: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error resetting geofence:', error);
+    return false;
+  }
 };
 
 // Calculate distance between two coordinates using Haversine formula

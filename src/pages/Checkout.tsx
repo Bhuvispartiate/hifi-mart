@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { getUserAddresses, UserAddress } from '@/lib/userProfile';
 import { createOrder as createFirestoreOrder } from '@/lib/firestoreService';
 import { LocationPicker } from '@/components/checkout/LocationPicker';
-import { isWithinGeofence, getDistanceFromCenter, getGeofenceConfig } from '@/lib/geofencing';
+import { isWithinGeofence, getDistanceFromCenter, fetchGeofenceConfig, GeofenceConfig } from '@/lib/geofencing';
 
 const paymentMethods = [
   { id: 'cod', label: 'Cash on Delivery', icon: Banknote, description: 'Pay when delivered' },
@@ -50,9 +50,14 @@ const Checkout = () => {
   const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [isOutsideDeliveryZone, setIsOutsideDeliveryZone] = useState(false);
   const [distanceFromCenter, setDistanceFromCenter] = useState<number | null>(null);
+  const [geofenceConfig, setGeofenceConfig] = useState<GeofenceConfig | null>(null);
 
   const grandTotal = totalPrice + deliveryFee - discount;
-  const geofenceConfig = getGeofenceConfig();
+
+  // Fetch geofence config on mount
+  useEffect(() => {
+    fetchGeofenceConfig().then(setGeofenceConfig);
+  }, []);
 
   // Check if location is within delivery zone
   useEffect(() => {
@@ -143,7 +148,7 @@ const Checkout = () => {
     if (pinnedLocation && isOutsideDeliveryZone) {
       toast({
         title: 'Outside delivery zone',
-        description: `Sorry, we only deliver within ${geofenceConfig.radiusKm} KM of our store`,
+        description: `Sorry, we only deliver within ${geofenceConfig?.radiusKm || 5} KM of our store`,
         variant: 'destructive',
       });
       return;
@@ -277,7 +282,7 @@ const Checkout = () => {
                       isOutsideDeliveryZone ? "text-destructive" : "text-muted-foreground"
                     )}>
                       {distanceFromCenter.toFixed(1)} KM from store
-                      {isOutsideDeliveryZone && ` (max: ${geofenceConfig.radiusKm} KM)`}
+                      {isOutsideDeliveryZone && ` (max: ${geofenceConfig?.radiusKm || 5} KM)`}
                     </p>
                   )}
                 </div>
@@ -287,7 +292,7 @@ const Checkout = () => {
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    Sorry, we can't deliver to this location. Please select a location within {geofenceConfig.radiusKm} KM of our store.
+                    Sorry, we can't deliver to this location. Please select a location within {geofenceConfig?.radiusKm || 5} KM of our store.
                   </AlertDescription>
                 </Alert>
               )}

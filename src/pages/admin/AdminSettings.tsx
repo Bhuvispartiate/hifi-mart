@@ -4,26 +4,38 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, Save, RotateCcw } from 'lucide-react';
-import { getGeofenceConfig, updateGeofenceRadius, updateGeofenceCenter, GeofenceConfig } from '@/lib/geofencing';
+import { MapPin, Save, RotateCcw, Loader2 } from 'lucide-react';
+import { fetchGeofenceConfig, updateGeofenceConfig, resetGeofenceToDefault, GeofenceConfig } from '@/lib/geofencing';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getMapboxPublicToken } from '@/lib/mapboxToken';
 
 const AdminSettings = () => {
   const { toast } = useToast();
-  const [config, setConfig] = useState<GeofenceConfig>(getGeofenceConfig());
-  const [radiusInput, setRadiusInput] = useState(config.radiusKm.toString());
+  const [config, setConfig] = useState<GeofenceConfig | null>(null);
+  const [radiusInput, setRadiusInput] = useState('5');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const marker = useRef<mapboxgl.Marker | null>(null);
-  const circle = useRef<mapboxgl.GeoJSONSource | null>(null);
 
-  // Initialize map
+  // Fetch config on mount
   useEffect(() => {
-    if (!mapContainer.current || map.current) return;
+    const loadConfig = async () => {
+      setIsLoading(true);
+      const fetchedConfig = await fetchGeofenceConfig();
+      setConfig(fetchedConfig);
+      setRadiusInput(fetchedConfig.radiusKm.toString());
+      setIsLoading(false);
+    };
+    loadConfig();
+  }, []);
+
+  // Initialize map after config is loaded
+  useEffect(() => {
+    if (!mapContainer.current || map.current || !config) return;
 
     mapboxgl.accessToken = getMapboxPublicToken();
 
@@ -45,11 +57,11 @@ const AdminSettings = () => {
     marker.current.on('dragend', () => {
       const lngLat = marker.current?.getLngLat();
       if (lngLat) {
-        setConfig(prev => ({
+        setConfig(prev => prev ? {
           ...prev,
           centerLat: lngLat.lat,
           centerLng: lngLat.lng,
-        }));
+        } : prev);
         updateCircle(lngLat.lat, lngLat.lng, config.radiusKm);
       }
     });
@@ -63,14 +75,14 @@ const AdminSettings = () => {
       map.current?.remove();
       map.current = null;
     };
-  }, []);
+  }, [config?.centerLat, config?.centerLng]);
 
   // Update circle when radius changes
   useEffect(() => {
-    if (map.current?.isStyleLoaded()) {
+    if (map.current?.isStyleLoaded() && config) {
       updateCircle(config.centerLat, config.centerLng, config.radiusKm);
     }
-  }, [config.radiusKm]);
+  }, [config?.radiusKm]);
 
   const addCircleLayer = (lat: number, lng: number, radiusKm: number) => {
     if (!map.current) return;
@@ -143,7 +155,9 @@ const AdminSettings = () => {
     };
   };
 
-  const handleSaveRadius = () => {
+  const handleSaveRadius = async () => {
+    if (!config) return;
+    
     const radius = parseFloat(radiusInput);
     if (isNaN(radius) || radius <= 0 || radius > 50) {
       toast({
@@ -155,43 +169,74 @@ const AdminSettings = () => {
     }
 
     setIsSaving(true);
-    setConfig(prev => ({ ...prev, radiusKm: radius }));
-    updateGeofenceRadius(radius);
-    updateGeofenceCenter(config.centerLat, config.centerLng);
     
-    setTimeout(() => {
-      setIsSaving(false);
+    const success = await updateGeofenceConfig({
+      centerLat: config.centerLat,
+      centerLng: config.centerLng,
+      radiusKm: radius,
+    });
+
+    if (success) {
+      setConfig(prev => prev ? { ...prev, radiusKm: radius } : prev);
       toast({
         title: 'Settings saved',
         description: `Geofence updated: ${radius} KM radius`,
       });
-    }, 500);
+    } else {
+      toast({
+        title: 'Error saving settings',
+        description: 'Please try again',
+        variant: 'destructive',
+      });
+    }
+    
+    setIsSaving(false);
   };
 
-  const handleReset = () => {
-    const defaultConfig: GeofenceConfig = {
-      centerLat: 13.308798940760282,
-      centerLng: 80.17290657335155,
-      radiusKm: 5,
-    };
-    setConfig(defaultConfig);
-    setRadiusInput('5');
-    updateGeofenceRadius(5);
-    updateGeofenceCenter(defaultConfig.centerLat, defaultConfig.centerLng);
+  const handleReset = async () => {
+    setIsSaving(true);
+    
+    const success = await resetGeofenceToDefault();
+    
+    if (success) {
+      const defaultConfig: GeofenceConfig = {
+        centerLat: 13.308798940760282,
+        centerLng: 80.17290657335155,
+        radiusKm: 5,
+      };
+      setConfig(defaultConfig);
+      setRadiusInput('5');
 
-    if (marker.current) {
-      marker.current.setLngLat([defaultConfig.centerLng, defaultConfig.centerLat]);
-    }
-    if (map.current) {
-      map.current.flyTo({ center: [defaultConfig.centerLng, defaultConfig.centerLat], zoom: 12 });
-      updateCircle(defaultConfig.centerLat, defaultConfig.centerLng, 5);
-    }
+      if (marker.current) {
+        marker.current.setLngLat([defaultConfig.centerLng, defaultConfig.centerLat]);
+      }
+      if (map.current) {
+        map.current.flyTo({ center: [defaultConfig.centerLng, defaultConfig.centerLat], zoom: 12 });
+        updateCircle(defaultConfig.centerLat, defaultConfig.centerLng, 5);
+      }
 
-    toast({
-      title: 'Settings reset',
-      description: 'Geofence reset to default (5 KM)',
-    });
+      toast({
+        title: 'Settings reset',
+        description: 'Geofence reset to default (5 KM)',
+      });
+    } else {
+      toast({
+        title: 'Error resetting settings',
+        description: 'Please try again',
+        variant: 'destructive',
+      });
+    }
+    
+    setIsSaving(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -236,33 +281,39 @@ const AdminSettings = () => {
               />
             </div>
             <Button onClick={handleSaveRadius} disabled={isSaving}>
-              <Save className="w-4 h-4 mr-2" />
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
               {isSaving ? 'Saving...' : 'Save Settings'}
             </Button>
-            <Button variant="outline" onClick={handleReset}>
+            <Button variant="outline" onClick={handleReset} disabled={isSaving}>
               <RotateCcw className="w-4 h-4 mr-2" />
               Reset to Default
             </Button>
           </div>
 
           {/* Current Config Display */}
-          <div className="p-4 bg-muted rounded-lg">
-            <h4 className="font-medium mb-2">Current Configuration</h4>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Center Lat:</span>
-                <p className="font-mono">{config.centerLat.toFixed(6)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Center Lng:</span>
-                <p className="font-mono">{config.centerLng.toFixed(6)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Radius:</span>
-                <p className="font-mono">{config.radiusKm} KM</p>
+          {config && (
+            <div className="p-4 bg-muted rounded-lg">
+              <h4 className="font-medium mb-2">Current Configuration</h4>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Center Lat:</span>
+                  <p className="font-mono">{config.centerLat.toFixed(6)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Center Lng:</span>
+                  <p className="font-mono">{config.centerLng.toFixed(6)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Radius:</span>
+                  <p className="font-mono">{config.radiusKm} KM</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
