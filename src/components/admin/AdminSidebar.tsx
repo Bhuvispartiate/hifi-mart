@@ -11,7 +11,8 @@ import {
   Store,
   FolderTree,
   ClipboardList,
-  MapPin
+  MapPin,
+  Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +25,7 @@ const navItems = [
   { path: '/admin/delivery-partners', icon: Truck, label: 'Delivery Partners' },
   { path: '/admin/live-tracking', icon: MapPin, label: 'Live Tracking' },
   { path: '/admin/home-delivery', icon: Store, label: 'Home Delivery' },
+  { path: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
 const AdminSidebar = () => {

@@ -45,6 +45,7 @@ import AdminOrderRequests from "./pages/admin/AdminOrderRequests";
 import AdminDeliveryPartners from "./pages/admin/AdminDeliveryPartners";
 import AdminHomeDelivery from "./pages/admin/AdminHomeDelivery";
 import AdminLiveTracking from "./pages/admin/AdminLiveTracking";
+import AdminSettings from "./pages/admin/AdminSettings";
 
 const queryClient = new QueryClient();
 
@@ -165,6 +166,7 @@ const App = () => (
                       <Route path="delivery-partners" element={<AdminDeliveryPartners />} />
                       <Route path="home-delivery" element={<AdminHomeDelivery />} />
                       <Route path="live-tracking" element={<AdminLiveTracking />} />
+                      <Route path="settings" element={<AdminSettings />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />

@@ -10,6 +10,7 @@ import {
   Banknote,
   Loader2,
   Navigation,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -26,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { getUserAddresses, UserAddress } from '@/lib/userProfile';
 import { createOrder as createFirestoreOrder } from '@/lib/firestoreService';
 import { LocationPicker } from '@/components/checkout/LocationPicker';
+import { isWithinGeofence, getDistanceFromCenter, getGeofenceConfig } from '@/lib/geofencing';
 
 const paymentMethods = [
   { id: 'cod', label: 'Cash on Delivery', icon: Banknote, description: 'Pay when delivered' },
@@ -45,8 +48,23 @@ const Checkout = () => {
   const [loadingAddresses, setLoadingAddresses] = useState(true);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
+  const [isOutsideDeliveryZone, setIsOutsideDeliveryZone] = useState(false);
+  const [distanceFromCenter, setDistanceFromCenter] = useState<number | null>(null);
 
   const grandTotal = totalPrice + deliveryFee - discount;
+  const geofenceConfig = getGeofenceConfig();
+
+  // Check if location is within delivery zone
+  useEffect(() => {
+    if (pinnedLocation) {
+      const withinZone = isWithinGeofence(pinnedLocation.lat, pinnedLocation.lng);
+      setIsOutsideDeliveryZone(!withinZone);
+      setDistanceFromCenter(getDistanceFromCenter(pinnedLocation.lat, pinnedLocation.lng));
+    } else {
+      setIsOutsideDeliveryZone(false);
+      setDistanceFromCenter(null);
+    }
+  }, [pinnedLocation]);
 
   // Load user addresses from Firestore
   useEffect(() => {
@@ -116,6 +134,16 @@ const Checkout = () => {
       toast({
         title: 'Select address',
         description: 'Please select a delivery address or pin a location on the map',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check geofencing - only allow orders within delivery zone
+    if (pinnedLocation && isOutsideDeliveryZone) {
+      toast({
+        title: 'Outside delivery zone',
+        description: `Sorry, we only deliver within ${geofenceConfig.radiusKm} KM of our store`,
         variant: 'destructive',
       });
       return;
@@ -219,15 +247,51 @@ const Checkout = () => {
           
           {pinnedLocation ? (
             <div className="space-y-3">
-              <div className="flex items-start gap-3 p-3 rounded-lg border border-primary bg-primary/5">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <MapPin className="w-5 h-5 text-primary" />
+              <div className={cn(
+                "flex items-start gap-3 p-3 rounded-lg border",
+                isOutsideDeliveryZone 
+                  ? "border-destructive bg-destructive/10" 
+                  : "border-primary bg-primary/5"
+              )}>
+                <div className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+                  isOutsideDeliveryZone ? "bg-destructive/20" : "bg-primary/10"
+                )}>
+                  {isOutsideDeliveryZone ? (
+                    <AlertTriangle className="w-5 h-5 text-destructive" />
+                  ) : (
+                    <MapPin className="w-5 h-5 text-primary" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-foreground">Pinned Location</p>
+                  <p className={cn(
+                    "font-medium text-sm",
+                    isOutsideDeliveryZone ? "text-destructive" : "text-foreground"
+                  )}>
+                    {isOutsideDeliveryZone ? "Outside Delivery Zone" : "Pinned Location"}
+                  </p>
                   <p className="text-sm text-muted-foreground line-clamp-2">{pinnedLocation.address}</p>
+                  {distanceFromCenter !== null && (
+                    <p className={cn(
+                      "text-xs mt-1",
+                      isOutsideDeliveryZone ? "text-destructive" : "text-muted-foreground"
+                    )}>
+                      {distanceFromCenter.toFixed(1)} KM from store
+                      {isOutsideDeliveryZone && ` (max: ${geofenceConfig.radiusKm} KM)`}
+                    </p>
+                  )}
                 </div>
               </div>
+              
+              {isOutsideDeliveryZone && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Sorry, we can't deliver to this location. Please select a location within {geofenceConfig.radiusKm} KM of our store.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -435,13 +499,15 @@ const Checkout = () => {
         <Button
           className="w-full h-12 text-base font-semibold"
           onClick={placeOrder}
-          disabled={isPlacingOrder || (!pinnedLocation && addresses.length === 0)}
+          disabled={isPlacingOrder || (!pinnedLocation && addresses.length === 0) || isOutsideDeliveryZone}
         >
           {isPlacingOrder ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Placing Order...
             </>
+          ) : isOutsideDeliveryZone ? (
+            'Outside Delivery Zone'
           ) : (
             `Pay ₹${grandTotal}`
           )}
