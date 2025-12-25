@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { MapPin, Navigation, X, Check, Loader2 } from 'lucide-react';
+import { MapPin, Navigation, X, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { getGeofenceConfig, isWithinGeofence } from '@/lib/geofencing';
 
 interface LocationPickerProps {
   open: boolean;
@@ -24,6 +25,31 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [isOutsideZone, setIsOutsideZone] = useState(false);
+
+  // Helper function to generate circle coordinates for geofence visualization
+  const createGeoJSONCircle = (center: [number, number], radiusKm: number, points: number = 64) => {
+    const coords: [number, number][] = [];
+    const distanceX = radiusKm / (111.32 * Math.cos((center[1] * Math.PI) / 180));
+    const distanceY = radiusKm / 110.574;
+
+    for (let i = 0; i < points; i++) {
+      const theta = (i / points) * (2 * Math.PI);
+      const x = distanceX * Math.cos(theta);
+      const y = distanceY * Math.sin(theta);
+      coords.push([center[0] + x, center[1] + y]);
+    }
+    coords.push(coords[0]); // Close the circle
+
+    return {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [coords],
+      },
+      properties: {},
+    };
+  };
 
   // Reverse geocode to get address
   const fetchAddress = useCallback(async (lat: number, lng: number) => {
@@ -50,8 +76,9 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
+        const { latitude, longitude } = position.coords;
           setSelectedLocation({ lat: latitude, lng: longitude });
+          setIsOutsideZone(!isWithinGeofence(latitude, longitude));
           
           if (map.current) {
             map.current.flyTo({
@@ -148,6 +175,7 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
           const lngLat = marker.current?.getLngLat();
           if (lngLat) {
             setSelectedLocation({ lat: lngLat.lat, lng: lngLat.lng });
+            setIsOutsideZone(!isWithinGeofence(lngLat.lat, lngLat.lng));
             fetchAddress(lngLat.lat, lngLat.lng);
           }
         });
@@ -157,12 +185,71 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
           const { lng, lat } = e.lngLat;
           marker.current?.setLngLat([lng, lat]);
           setSelectedLocation({ lat, lng });
+          setIsOutsideZone(!isWithinGeofence(lat, lng));
           fetchAddress(lat, lng);
         });
 
         // Map load event
         map.current.on('load', () => {
           setMapLoaded(true);
+          
+          // Add geofence circle visualization
+          const geofenceConfig = getGeofenceConfig();
+          const circleData = createGeoJSONCircle(
+            [geofenceConfig.centerLng, geofenceConfig.centerLat],
+            geofenceConfig.radiusKm
+          );
+
+          map.current?.addSource('geofence', {
+            type: 'geojson',
+            data: circleData,
+          });
+
+          // Add fill layer (semi-transparent green)
+          map.current?.addLayer({
+            id: 'geofence-fill',
+            type: 'fill',
+            source: 'geofence',
+            paint: {
+              'fill-color': '#0C831F',
+              'fill-opacity': 0.1,
+            },
+          });
+
+          // Add border layer (solid green line)
+          map.current?.addLayer({
+            id: 'geofence-border',
+            type: 'line',
+            source: 'geofence',
+            paint: {
+              'line-color': '#0C831F',
+              'line-width': 3,
+              'line-opacity': 0.8,
+            },
+          });
+
+          // Add center marker for store location
+          const storeMarkerEl = document.createElement('div');
+          storeMarkerEl.innerHTML = `
+            <div style="
+              width: 32px; 
+              height: 32px; 
+              background: #0C831F; 
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              border: 3px solid white;
+            ">
+              <span style="font-size: 16px;">🏪</span>
+            </div>
+          `;
+
+          new mapboxgl.Marker({ element: storeMarkerEl })
+            .setLngLat([geofenceConfig.centerLng, geofenceConfig.centerLat])
+            .addTo(map.current!);
+
           // Get current location after map loads
           getCurrentLocation();
         });
@@ -234,14 +321,28 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
             )}
           </Button>
 
+          {/* Outside zone warning */}
+          {isOutsideZone && selectedLocation && (
+            <div className="absolute top-4 left-4 right-4 bg-destructive/90 text-destructive-foreground px-3 py-2 rounded-lg shadow-lg z-10 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm font-medium">Outside delivery zone</span>
+            </div>
+          )}
+
           {/* Selected address display */}
           <div className="p-4 border-t border-border bg-card">
             <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <MapPin className="w-5 h-5 text-primary" />
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isOutsideZone ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                {isOutsideZone ? (
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                ) : (
+                  <MapPin className="w-5 h-5 text-primary" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm text-foreground">Delivery Location</p>
+                <p className={`font-medium text-sm ${isOutsideZone ? 'text-destructive' : 'text-foreground'}`}>
+                  {isOutsideZone ? 'Outside Delivery Zone' : 'Delivery Location'}
+                </p>
                 {isLoadingAddress ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -263,10 +364,20 @@ export const LocationPicker = ({ open, onClose, onLocationSelect, initialLocatio
               <Button 
                 onClick={handleConfirmLocation} 
                 className="flex-1"
-                disabled={!selectedLocation || !address || isLoadingAddress}
+                disabled={!selectedLocation || !address || isLoadingAddress || isOutsideZone}
+                variant={isOutsideZone ? "destructive" : "default"}
               >
-                <Check className="w-4 h-4 mr-2" />
-                Confirm
+                {isOutsideZone ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    Outside Zone
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Confirm
+                  </>
+                )}
               </Button>
             </div>
           </div>
