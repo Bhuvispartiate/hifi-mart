@@ -10,7 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
 import { useFCM } from '@/hooks/useFCM';
-import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp, saveFCMToken } from '@/lib/firestoreService';
+import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp, saveFCMToken, updateDeliveryPartnerTracking } from '@/lib/firestoreService';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -411,42 +411,92 @@ export default function DeliveryHome() {
     }
   };
 
-  // Live ETA refresh every 30 seconds
+  // Live location tracking and ETA updates - every 10 seconds when navigating
   useEffect(() => {
-    if (status !== 'navigating') return;
+    if (status !== 'navigating' || !deliveryPartner?.id || !currentOrder?.id) return;
 
-    const intervalId = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const currentPos = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-          startCoordsRef.current = currentPos;
+    let lastUpdate = 0;
+    const UPDATE_INTERVAL = 10000; // 10 seconds
 
-          // Snap marker to the nearest point on the selected route
-          if (deliveryMarkerRef.current && routeOptions[selectedRouteIndex]) {
-            const routeCoords = routeOptions[selectedRouteIndex].geometry.coordinates;
-            const snappedPoint = findNearestPointOnRoute(currentPos, routeCoords);
-            deliveryMarkerRef.current.setLngLat(snappedPoint);
+    const watchId = navigator.geolocation.watchPosition(
+      async (position) => {
+        const now = Date.now();
+        if (now - lastUpdate < UPDATE_INTERVAL) return;
+        lastUpdate = now;
+
+        const currentPos = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        startCoordsRef.current = currentPos;
+
+        // Snap marker to the nearest point on the selected route
+        if (deliveryMarkerRef.current && routeOptions[selectedRouteIndex]) {
+          const routeCoords = routeOptions[selectedRouteIndex].geometry.coordinates;
+          const snappedPoint = findNearestPointOnRoute(currentPos, routeCoords);
+          deliveryMarkerRef.current.setLngLat(snappedPoint);
+        }
+
+        if (endCoordsRef.current) {
+          // Fetch fresh route with updated ETA
+          try {
+            const response = await fetch(
+              `https://api.mapbox.com/directions/v5/mapbox/driving/${currentPos.lng},${currentPos.lat};${endCoordsRef.current.lng},${endCoordsRef.current.lat}?alternatives=true&geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`
+            );
+            
+            if (response.ok) {
+              const data = await response.json();
+              const routes: RouteOption[] = (data.routes ?? [])
+                .slice(0, 3)
+                .map((r: any) => ({
+                  duration: typeof r.duration === 'number' ? r.duration : 0,
+                  distance: typeof r.distance === 'number' ? r.distance : 0,
+                  geometry: r.geometry as LineStringGeometry,
+                }))
+                .filter((r) => r.geometry?.coordinates?.length);
+
+              if (routes.length) {
+                setRouteOptions(routes);
+                applyRoutesToMap(routes, selectedRouteIndex < routes.length ? selectedRouteIndex : 0);
+                setLastRefresh(new Date());
+
+                // Get ETA from selected route
+                const selectedRoute = routes[selectedRouteIndex] || routes[0];
+                const estimatedArrival = new Date(Date.now() + selectedRoute.duration * 1000);
+
+                // Update delivery partner tracking in Firestore
+                await updateDeliveryPartnerTracking(deliveryPartner.id, {
+                  currentLocation: currentPos,
+                  estimatedArrival,
+                  estimatedDuration: selectedRoute.duration,
+                  estimatedDistance: selectedRoute.distance,
+                  destinationLocation: endCoordsRef.current,
+                });
+
+                // Also update the order with delivery partner location and ETA
+                await updateOrderStatus(currentOrder.id, 'out_for_delivery', {
+                  deliveryPartnerLocation: currentPos,
+                  estimatedArrival,
+                  estimatedDuration: selectedRoute.duration,
+                  estimatedDistance: selectedRoute.distance,
+                });
+
+                console.log(`[Tracking] Updated location & ETA: ${formatDuration(selectedRoute.duration)} away`);
+              }
+            }
+          } catch (error) {
+            console.error('Error updating tracking:', error);
           }
+        }
+      },
+      (error) => {
+        console.error('Geolocation watch error:', error);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
 
-          if (endCoordsRef.current) {
-            fetchRoute(currentPos, endCoordsRef.current, false);
-          }
-        },
-        () => {
-          // If geolocation fails, use stored coords
-          if (startCoordsRef.current && endCoordsRef.current) {
-            fetchRoute(startCoordsRef.current, endCoordsRef.current, false);
-          }
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(intervalId);
-  }, [status, selectedRouteIndex, routeOptions]);
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [status, deliveryPartner?.id, currentOrder?.id, selectedRouteIndex, routeOptions, applyRoutesToMap]);
 
   useEffect(() => {
     if (status !== 'navigating') return;
