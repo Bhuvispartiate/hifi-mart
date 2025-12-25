@@ -74,24 +74,26 @@ serve(async (req) => {
       console.log(`Generated OTP ${otp} for ${cleanedPhone}`);
 
       // Send OTP via Fast2SMS
+      // Fast2SMS expects the API key in the `authorization` header (NOT in the body)
       const fast2smsUrl = 'https://www.fast2sms.com/dev/bulkV2';
-      
-      const params = new URLSearchParams({
-        authorization: FAST2SMS_API_KEY,
+
+      const payload = {
         route: 'otp',
         variables_values: otp,
         flash: '0',
         numbers: cleanedPhone,
-      });
+      };
 
       console.log('Sending SMS via Fast2SMS...');
-      
+
       const response = await fetch(fast2smsUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          authorization: FAST2SMS_API_KEY,
+          accept: '*/*',
+          'Content-Type': 'application/json',
         },
-        body: params.toString(),
+        body: JSON.stringify(payload),
       });
 
       const responseText = await response.text();
