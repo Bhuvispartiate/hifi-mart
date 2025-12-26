@@ -29,6 +29,7 @@ import DeliveryLogin from "./pages/delivery/DeliveryLogin";
 import DeliveryHome from "./pages/delivery/DeliveryHome";
 import DeliveryOrders from "./pages/delivery/DeliveryOrders";
 import DeliveryProfile from "./pages/delivery/DeliveryProfile";
+import DeliverySettings from "./pages/delivery/DeliverySettings";
 
 // Onboarding pages
 import OnboardingWelcome from "./pages/onboarding/OnboardingWelcome";
@@ -150,6 +151,11 @@ const App = () => (
                     <Route path="/delivery/profile" element={
                       <DeliveryProtectedRoute>
                         <DeliveryProfile />
+                      </DeliveryProtectedRoute>
+                    } />
+                    <Route path="/delivery/settings" element={
+                      <DeliveryProtectedRoute>
+                        <DeliverySettings />
                       </DeliveryProtectedRoute>
                     } />
 
