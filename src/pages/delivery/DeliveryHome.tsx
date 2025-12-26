@@ -595,6 +595,9 @@ export default function DeliveryHome() {
       const success = await verifyDeliveryOtp(currentOrder.id, otpInput);
       
       if (success) {
+        // Play success sound and haptic feedback
+        playSuccessNotification();
+        
         toast({ title: 'Delivery completed!', description: 'OTP verified successfully' });
         setStatus('waiting');
         setCurrentOrder(null);
@@ -795,12 +798,18 @@ export default function DeliveryHome() {
             {/* Order Assigned State */}
             {status === 'assigned' && currentOrder && (
               <div className="space-y-4">
-                <Card className="border-primary border-2 bg-secondary/30">
-                  <CardContent className="p-4">
+                <Card className="border-primary border-2 bg-secondary/30 animate-pulse-border relative overflow-hidden">
+                  {/* Pulsing glow effect */}
+                  <div className="absolute inset-0 bg-primary/5 animate-[pulse_2s_ease-in-out_infinite]" />
+                  
+                  <CardContent className="p-4 relative">
                     <div className="flex items-center gap-2 mb-3">
-                      <Package className="w-5 h-5 text-primary" />
+                      <div className="relative">
+                        <Package className="w-5 h-5 text-primary" />
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full animate-ping" />
+                      </div>
                       <span className="font-semibold text-primary">New Order Assigned!</span>
-                      <Badge variant="secondary" className="ml-auto">
+                      <Badge variant="secondary" className="ml-auto animate-[pulse_1.5s_ease-in-out_infinite]">
                         #{currentOrder.id.slice(0, 8).toUpperCase()}
                       </Badge>
                     </div>
