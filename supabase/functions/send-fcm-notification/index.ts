@@ -96,7 +96,7 @@ serve(async (req) => {
     }
 
     const serviceAccount = JSON.parse(serviceAccountJson);
-    const { token, title, body, data, sound } = await req.json();
+    const { token, title, body, data, sound, channelId, priority } = await req.json();
 
     if (!token) {
       throw new Error('FCM token is required');
@@ -106,7 +106,11 @@ serve(async (req) => {
     const accessToken = await getAccessToken(serviceAccount);
     console.log('Access token obtained');
 
-    // Build FCM message
+    // Determine channel ID - default to high priority for delivery/order notifications
+    const androidChannelId = channelId || data?.channelId || 'order_alerts';
+    const notificationPriority = priority || 'high';
+
+    // Build FCM message with enhanced Android configuration
     const message: any = {
       message: {
         token: token,
@@ -114,35 +118,90 @@ serve(async (req) => {
           title: title || 'New Notification',
           body: body || 'You have a new notification',
         },
-        data: data || {},
+        data: {
+          ...data,
+          channelId: androidChannelId,
+          priority: notificationPriority,
+          timestamp: new Date().toISOString(),
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        },
+        // Android-specific configuration for high-priority heads-up notifications
         android: {
-          priority: 'high',
+          priority: 'high', // Message delivery priority
+          ttl: '86400s', // Time to live - 24 hours
           notification: {
             sound: sound || 'default',
-            channel_id: 'high_priority_channel',
+            channel_id: androidChannelId, // Must match created channel in app
+            priority: 'max', // Notification display priority - shows as heads-up
+            visibility: 'public',
+            default_sound: true,
+            default_vibrate_timings: true,
+            default_light_settings: true,
+            notification_count: 1,
+            // For Zepto/Swiggy-like persistent alerts
+            sticky: androidChannelId === 'order_alerts',
+            // Vibration pattern for urgent notifications (ms)
+            vibrate_timings: ['0s', '0.3s', '0.1s', '0.3s', '0.1s', '0.3s'],
+            // Light settings for LED notifications
+            light_settings: {
+              color: {
+                red: 1,
+                green: 0.5,
+                blue: 0,
+                alpha: 1,
+              },
+              light_on_duration: '0.5s',
+              light_off_duration: '0.5s',
+            },
           },
+          // Direct boot mode - show notification even when device is locked
+          direct_boot_ok: true,
         },
+        // Web push configuration
         webpush: {
+          headers: {
+            Urgency: 'high',
+            TTL: '86400',
+          },
           notification: {
             requireInteraction: true,
             vibrate: [200, 100, 200, 100, 200],
+            renotify: true,
+            tag: `${androidChannelId}_${Date.now()}`,
           },
           fcm_options: {
             link: data?.url || '/',
           },
         },
+        // iOS/APNs configuration
         apns: {
+          headers: {
+            'apns-priority': '10', // Immediate delivery
+            'apns-push-type': 'alert',
+          },
           payload: {
             aps: {
               sound: sound || 'default',
               badge: 1,
+              'content-available': 1,
+              'mutable-content': 1,
+              // Critical alert for high-priority notifications (requires entitlement)
+              // 'sound': {
+              //   critical: 1,
+              //   name: 'default',
+              //   volume: 1.0
+              // },
+              alert: {
+                title: title,
+                body: body,
+              },
             },
           },
         },
       },
     };
 
-    console.log('Sending FCM message to:', token.substring(0, 20) + '...');
+    console.log('Sending FCM message to:', token.substring(0, 20) + '...', 'Channel:', androidChannelId);
 
     const fcmResponse = await fetch(
       `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`,
