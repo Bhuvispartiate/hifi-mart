@@ -141,7 +141,7 @@ export default function DeliveryProfile() {
               <div key={item.label}>
                 <button
                   className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-                  onClick={() => {}}
+                  onClick={() => item.path && navigate(item.path)}
                 >
                   <div className="flex items-center gap-3">
                     <item.icon className="w-5 h-5 text-muted-foreground" />
