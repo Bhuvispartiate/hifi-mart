@@ -8,7 +8,7 @@ import { DeliveryBottomNav } from '@/components/delivery/DeliveryBottomNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useDeliveryAuth } from '@/contexts/DeliveryAuthContext';
-import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { useDeliveryAlerts } from '@/hooks/useDeliveryAlerts';
 import { useFCM } from '@/hooks/useFCM';
 import { Order, subscribeToAllOrders, updateOrderStatus, verifyDeliveryOtp, setDeliveryOtp, saveFCMToken, updateDeliveryPartnerTracking } from '@/lib/firestoreService';
 import { calculateETA, formatDuration, formatDistance } from '@/lib/etaService';
@@ -74,7 +74,16 @@ export default function DeliveryHome() {
   const endCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const deliveryMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const hadOrderRef = useRef(false);
-  const { play: playNotification, stop: stopNotification } = useNotificationSound(5);
+  
+  // Use enhanced delivery alerts with sounds and haptics
+  const { 
+    playOrderAlert, 
+    playUpdateNotification, 
+    playSuccessNotification,
+    stopAlerts,
+    preferences 
+  } = useDeliveryAlerts(deliveryPartner?.id);
+  
   const { 
     fcmToken, 
     isSupported: fcmSupported, 
@@ -104,10 +113,8 @@ export default function DeliveryHome() {
     const unsubscribe = setupForegroundMessageHandler((payload) => {
       console.log('Foreground FCM message:', payload);
       
-      // Play notification sound
-      if (soundEnabled) {
-        playNotification();
-      }
+      // Play notification sound and haptics
+      playUpdateNotification();
       
       // Show in-app toast
       toast({
@@ -117,7 +124,7 @@ export default function DeliveryHome() {
     });
 
     return unsubscribe;
-  }, [fcmSupported, soundEnabled, playNotification, setupForegroundMessageHandler]);
+  }, [fcmSupported, playUpdateNotification, setupForegroundMessageHandler]);
 
   // Subscribe to real-time orders assigned to this delivery partner
   useEffect(() => {
@@ -135,10 +142,8 @@ export default function DeliveryHome() {
       if (myActiveOrder) {
         // Play notification if new order assigned (wasn't assigned before)
         if (!hadOrderRef.current && myActiveOrder.status === 'confirmed') {
-          // Play ringtone sound
-          if (soundEnabled) {
-            playNotification();
-          }
+          // Play order alert with sound and haptics (Zepto-like ringtone + vibration)
+          playOrderAlert();
           
           // Show in-app toast
           toast({
@@ -169,7 +174,7 @@ export default function DeliveryHome() {
     });
 
     return () => unsubscribe();
-  }, [deliveryPartner?.id, soundEnabled, playNotification]);
+  }, [deliveryPartner?.id, playOrderAlert]);
 
   // Initialize map when navigating
   useEffect(() => {
@@ -757,7 +762,7 @@ export default function DeliveryHome() {
                   onClick={() => {
                     setSoundEnabled(!soundEnabled);
                     if (soundEnabled) {
-                      stopNotification();
+                      stopAlerts();
                     }
                   }}
                 >
